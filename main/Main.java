@@ -7,7 +7,7 @@ import java.io.IOException;
 public class Main {
     public static void main(String[] args) throws Exception {
         if(args.length < 1){
-            System.err.println("Usage: java Main <inputFile1> <inputFile2> ... <inputFileN>");
+            System.err.println("Usage: java Main <inputFile1.java> <inputFile2.java> ... <inputFileN.java>");
             System.exit(1);
         }
         FileInputStream fis = null;
@@ -29,7 +29,15 @@ public class Main {
                 arguOTA.symbolTable = STVisitor.globalST;
                 offsetTableVisitor OTVisitor = new offsetTableVisitor();
                 root.accept(OTVisitor, arguOTA);
+                System.out.println("Offset Table for program in inputFile \"" + args[i] + "\" created succesfully.");
                 OTVisitor.printResult();
+                CLLVMArgs arguCLLVMA = new CLLVMArgs();
+                arguCLLVMA.offsetTable = OTVisitor.stack;
+                String name = args[i].split(".")[0];
+                arguCLLVMA.scope = name;
+                compileLLVMVisitor CLLVMVisitor = new compileLLVMVisitor();
+                root.accept(CLLVMVisitor, arguCLLVMA);
+                System.out.println("Compilation of program in inputFile \"" + args[i] + "\" to LLVM IR succesful (file " + name + ".ll).");
             }
             catch(ParseException ex){
                 System.out.println(ex.getMessage() + " inputFile \"" + args[i] + "\"");
