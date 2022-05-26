@@ -32,12 +32,12 @@ public class Main {
                 System.out.println("Offset Table for program in inputFile \"" + args[i] + "\" created succesfully.");
                 OTVisitor.printResult();
                 CLLVMArgs arguCLLVMA = new CLLVMArgs();
+                arguCLLVMA.symbolTable = STVisitor.globalST;
                 arguCLLVMA.offsetTable = OTVisitor.stack;
-                String name = args[i].split(".")[0];
-                arguCLLVMA.scope = name;
+                arguCLLVMA.scope = args[i].split("\\.")[0];
                 compileLLVMVisitor CLLVMVisitor = new compileLLVMVisitor();
-                root.accept(CLLVMVisitor, arguCLLVMA);
-                System.out.println("Compilation of program in inputFile \"" + args[i] + "\" to LLVM IR succesful (file " + name + ".ll).");
+                String name = root.accept(CLLVMVisitor, arguCLLVMA);
+                System.out.println("Compilation of program in inputFile \"" + args[i] + "\" to LLVM IR succesful (file " + name + ").");
             }
             catch(ParseException ex){
                 System.out.println(ex.getMessage() + " inputFile \"" + args[i] + "\"");
@@ -45,9 +45,13 @@ public class Main {
             catch(FileNotFoundException ex){
                 System.err.println(ex.getMessage() + " inputFile \"" + args[i] + "\"");
             }
+            catch (Exception ex) {
+                System.err.println("Error in inputFile \"" + args[i] + "\" (" + ex.getMessage() + ").");
+            }
             finally{
                 try{
                     if(fis != null) fis.close();
+                    System.out.println();
                 }
                 catch(IOException ex){
                     System.err.println(ex.getMessage() + " inputFile \"" + args[i] + "\"");
