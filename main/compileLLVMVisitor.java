@@ -35,15 +35,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
             throw new Exception();
         }
         FileWriter writer = new FileWriter(name);
-        // String mainClass = "";
-        // for (Map.Entry<String, classInfo> entry : argu.symbolTable.entrySet())
-        // if (!argu.offsetTable.containsKey(entry.getKey())) {
-        //     mainClass = entry.getKey();
-        //     break;
-        // }
-        // if (mainClass.compareTo("") == 0) throw new Exception();
-        // String vTable = "@." + mainClass + "_vtable = global [0 x i8*] []\n";
-        // writer.write(vTable);
         for (Map.Entry<String, classInfo> entry : argu.symbolTable.entrySet()) {
             String className = entry.getKey(), vTable = "@." + className + "_vtable = global [";
             Map<String, methodInfo> classMethods;
@@ -54,7 +45,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
                 continue;
             }
             int size = classMethods.size();
-            // vTable += Integer.toString(size) + " x i8*] [";
             vTable += size + " x i8*] [";
             for (Map.Entry<String, methodInfo> entryIN : classMethods.entrySet()) {
                 vTable += "i8* bitcast (";
@@ -66,7 +56,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
                 else if (retType.compareTo("int") == 0) vTable += "i32";
                 else if (argu.symbolTable.containsKey(retType)) vTable += "i8*";
                 else throw new Exception();
-                // System.out.println("here");
                 vTable += " (i8*";
                 if (methodI.argNum != 0) {
                     String[] argTypes = methodI.argTypes.split(", ");
@@ -86,46 +75,11 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
             vTable += "]\n";
             writer.write(vTable);
         }
-        // for (Map.Entry<String, OTEntry> entry : argu.offsetTable.entrySet()) {
-        //     String className = entry.getKey();
-        //     vTable = "@." + className + "_vtable = global [";
-        //     List<OTData> classMethods;
-        //     if ((classMethods = entry.getValue().methods) == null) throw new Exception();
-        //     int size = classMethods.size();
-        //     // vTable += Integer.toString(size) + " x i8*] [";
-        //     vTable += size + " x i8*] [";
-        //     for (int i = 0; i < size; i++) {
-        //         vTable += "i8* bitcast (";
-        //         String methName = classMethods.get(i).identifier;
-        //         classInfo classI;
-        //         if ((classI = argu.symbolTable.get(className)) == null) throw new Exception();
-        //         methodInfo methodI;
-        //         if ((methodI = classI.methods.get(methName)) == null) throw new Exception();
-        //         String retType = methodI.returnValue;
-        //         if (retType.compareTo("boolean[]") == 0) vTable += "i1*";
-        //         else if (retType.compareTo("int[]") == 0) vTable += "i32*";
-        //         else if (retType.compareTo("boolean") == 0) vTable += "i1";
-        //         else if (retType.compareTo("int") == 0) vTable += "i32";
-        //         else if (argu.symbolTable.containsKey(retType)) vTable += "i8*";
-        //         else throw new Exception();
-        //         vTable += " (i8*";
-        //         if (methodI.argNum != 0) {
-        //             String[] argTypes = methodI.argTypes.split(", ");
-        //             for (String argType : argTypes) {
-        //                 if (argType.compareTo("boolean[]") == 0) vTable += ", i1*";
-        //                 else if (argType.compareTo("int[]") == 0) vTable += ", i32*";
-        //                 else if (argType.compareTo("boolean") == 0) vTable += ", i1";
-        //                 else if (argType.compareTo("int") == 0) vTable += ", i32";
-        //                 else if (argu.symbolTable.containsKey(argType)) vTable += ", i8*";
-        //                 else throw new Exception();
-        //             }
-        //         }
-        //         vTable += ")* @" + className + "." + methName + " to i8*)";
-        //         if (i < size - 1) vTable += ", ";
-        //     }
-        //     vTable += "]\n";
-        //     writer.write(vTable);
-        // }
+        writer.write("\ndeclare i8* @calloc(i32, i32)\ndeclare i32 @printf(i8*, ...)\ndeclare void @exit(i32)\n");
+        writer.write("\n@_cint = constant [4 x i8] c\"%d\\0a\\00\"\n@_cOOB = constant [15 x i8] c\"Out of bounds\\0a\\00\"\n");
+        writer.write("\ndefine void @print_int(i32 %i) {\n\t%_str = bitcast [4 x i8]* @_cint to i8*\n\tcall i32 (i8*, ...) @printf(i8* %_str, i32 %i)\n\tret void\n}\n");
+        writer.write("\ndefine voide @throw_oob() {\n\t%_str = bitcast [15 x i8]* @cOOB to i8*\n\tcall i32 (i8*, ...) @printf(i8* %_str)\n\tcall void @exit(i32 1)\n\tret void\n}\n");
+        writer.write("\n");
         writer.close();
         return name;
     }
