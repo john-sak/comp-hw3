@@ -34,10 +34,10 @@ public class Main {
                 CLLVMArgs arguCLLVMA = new CLLVMArgs();
                 arguCLLVMA.symbolTable = STVisitor.globalST;
                 arguCLLVMA.offsetTable = OTVisitor.stack;
-                arguCLLVMA.scope = args[i].split("\\.")[0];
+                arguCLLVMA.fileName = args[i];
                 compileLLVMVisitor CLLVMVisitor = new compileLLVMVisitor();
-                String name = root.accept(CLLVMVisitor, arguCLLVMA);
-                System.out.println("Compilation of program in inputFile \"" + args[i] + "\" to LLVM IR succesful (file " + name + ").");
+                root.accept(CLLVMVisitor, arguCLLVMA);
+                System.out.println("Compilation of program in inputFile \"" + args[i] + "\" to LLVM IR succesful (file " + arguCLLVMA.fileName + ").");
             }
             catch(ParseException ex){
                 System.out.println(ex.getMessage() + " inputFile \"" + args[i] + "\"");
