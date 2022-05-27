@@ -44,22 +44,18 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if (mainClass.compareTo("") == 0) throw new Exception();
         String vTable = "@." + mainClass + "_vtable = global [0 x i8*] []\n";
         writer.write(vTable);
-        for (Map.Entry<String, OTEntry> entry : argu.offsetTable.entrySet()) {
+        for (Map.Entry<String, classInfo> entry : argu.symbolTable.entrySet()) {
             String className = entry.getKey();
             vTable = "@." + className + "_vtable = global [";
-            List<OTData> classMethods;
+            Map<String, methodInfo> classMethods;
             if ((classMethods = entry.getValue().methods) == null) throw new Exception();
             int size = classMethods.size();
             // vTable += Integer.toString(size) + " x i8*] [";
             vTable += size + " x i8*] [";
-            for (int i = 0; i < size; i++) {
+            for (Map.Entry<String, methodInfo> entryIN : classMethods.entrySet()) {
                 vTable += "i8* bitcast (";
-                String methName = classMethods.get(i).identifier;
-                classInfo classI;
-                if ((classI = argu.symbolTable.get(className)) == null) throw new Exception();
-                methodInfo methodI;
-                if ((methodI = classI.methods.get(methName)) == null) throw new Exception();
-                String retType = methodI.returnValue;
+                methodInfo methodI = entryIN.getValue();
+                String methName = entryIN.getKey(), retType = methodI.returnValue;
                 if (retType.compareTo("boolean[]") == 0) vTable += "i1*";
                 else if (retType.compareTo("int[]") == 0) vTable += "i32*";
                 else if (retType.compareTo("boolean") == 0) vTable += "i1";
@@ -79,11 +75,52 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
                     }
                 }
                 vTable += ")* @" + className + "." + methName + " to i8*)";
-                if (i < size - 1) vTable += ", ";
             }
+            int length = vTable.length();
+            if (vTable.substring(length - 2, length).compareTo(", ") == 0) vTable = vTable.substring(0, length - 2);
             vTable += "]\n";
             writer.write(vTable);
         }
+        // for (Map.Entry<String, OTEntry> entry : argu.offsetTable.entrySet()) {
+        //     String className = entry.getKey();
+        //     vTable = "@." + className + "_vtable = global [";
+        //     List<OTData> classMethods;
+        //     if ((classMethods = entry.getValue().methods) == null) throw new Exception();
+        //     int size = classMethods.size();
+        //     // vTable += Integer.toString(size) + " x i8*] [";
+        //     vTable += size + " x i8*] [";
+        //     for (int i = 0; i < size; i++) {
+        //         vTable += "i8* bitcast (";
+        //         String methName = classMethods.get(i).identifier;
+        //         classInfo classI;
+        //         if ((classI = argu.symbolTable.get(className)) == null) throw new Exception();
+        //         methodInfo methodI;
+        //         if ((methodI = classI.methods.get(methName)) == null) throw new Exception();
+        //         String retType = methodI.returnValue;
+        //         if (retType.compareTo("boolean[]") == 0) vTable += "i1*";
+        //         else if (retType.compareTo("int[]") == 0) vTable += "i32*";
+        //         else if (retType.compareTo("boolean") == 0) vTable += "i1";
+        //         else if (retType.compareTo("int") == 0) vTable += "i32";
+        //         else if (argu.symbolTable.containsKey(retType)) vTable += "i8*";
+        //         else throw new Exception();
+        //         vTable += " (i8*";
+        //         if (methodI.argNum != 0) {
+        //             String[] argTypes = methodI.argTypes.split(", ");
+        //             for (String argType : argTypes) {
+        //                 if (argType.compareTo("boolean[]") == 0) vTable += ", i1*";
+        //                 else if (argType.compareTo("int[]") == 0) vTable += ", i32*";
+        //                 else if (argType.compareTo("boolean") == 0) vTable += ", i1";
+        //                 else if (argType.compareTo("int") == 0) vTable += ", i32";
+        //                 else if (argu.symbolTable.containsKey(argType)) vTable += ", i8*";
+        //                 else throw new Exception();
+        //             }
+        //         }
+        //         vTable += ")* @" + className + "." + methName + " to i8*)";
+        //         if (i < size - 1) vTable += ", ";
+        //     }
+        //     vTable += "]\n";
+        //     writer.write(vTable);
+        // }
         writer.close();
         return name;
     }
