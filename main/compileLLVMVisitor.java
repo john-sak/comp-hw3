@@ -35,20 +35,24 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
             throw new Exception();
         }
         FileWriter writer = new FileWriter(name);
-        String mainClass = "";
-        for (Map.Entry<String, classInfo> entry : argu.symbolTable.entrySet())
-            if (!argu.offsetTable.containsKey(entry.getKey())) {
-                mainClass = entry.getKey();
-                break;
-            }
-        if (mainClass.compareTo("") == 0) throw new Exception();
-        String vTable = "@." + mainClass + "_vtable = global [0 x i8*] []\n";
-        writer.write(vTable);
+        // String mainClass = "";
+        // for (Map.Entry<String, classInfo> entry : argu.symbolTable.entrySet())
+        // if (!argu.offsetTable.containsKey(entry.getKey())) {
+        //     mainClass = entry.getKey();
+        //     break;
+        // }
+        // if (mainClass.compareTo("") == 0) throw new Exception();
+        // String vTable = "@." + mainClass + "_vtable = global [0 x i8*] []\n";
+        // writer.write(vTable);
         for (Map.Entry<String, classInfo> entry : argu.symbolTable.entrySet()) {
-            String className = entry.getKey();
-            vTable = "@." + className + "_vtable = global [";
+            String className = entry.getKey(), vTable = "@." + className + "_vtable = global [";
             Map<String, methodInfo> classMethods;
             if ((classMethods = entry.getValue().methods) == null) throw new Exception();
+            if (classMethods.containsKey("main")) {
+                vTable += "0 x i8*] []\n";
+                writer.write(vTable);
+                continue;
+            }
             int size = classMethods.size();
             // vTable += Integer.toString(size) + " x i8*] [";
             vTable += size + " x i8*] [";
@@ -62,6 +66,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
                 else if (retType.compareTo("int") == 0) vTable += "i32";
                 else if (argu.symbolTable.containsKey(retType)) vTable += "i8*";
                 else throw new Exception();
+                // System.out.println("here");
                 vTable += " (i8*";
                 if (methodI.argNum != 0) {
                     String[] argTypes = methodI.argTypes.split(", ");
