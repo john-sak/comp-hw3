@@ -30,19 +30,19 @@ public class Main {
                 offsetTableVisitor OTVisitor = new offsetTableVisitor();
                 root.accept(OTVisitor, arguOTA);
                 System.out.println("Offset Table for program in inputFile \"" + args[i] + "\" created succesfully.");
-                OTVisitor.printResult();
-                // CLLVMArgs arguCLLVMA = new CLLVMArgs();
-                // arguCLLVMA.symbolTable = STVisitor.globalST;
-                // arguCLLVMA.offsetTable = OTVisitor.stack;
-                // arguCLLVMA.fileName = args[i];
-                // compileLLVMVisitor CLLVMVisitor = new compileLLVMVisitor();
-                // root.accept(CLLVMVisitor, arguCLLVMA);
+                // OTVisitor.printResult();
                 VTArgs arguVTA = new VTArgs();
                 arguVTA.fileName = args[i];
                 arguVTA.symbolTable = STVisitor.globalST;
                 arguVTA.offsetTable = OTVisitor.stack;
                 vTableVisitor VTVisitor = new vTableVisitor();
                 root.accept(VTVisitor, arguVTA);
+                // CLLVMArgs arguCLLVMA = new CLLVMArgs();
+                // arguCLLVMA.symbolTable = STVisitor.globalST;
+                // arguCLLVMA.offsetTable = OTVisitor.stack;
+                // arguCLLVMA.fileName = args[i];
+                // compileLLVMVisitor CLLVMVisitor = new compileLLVMVisitor();
+                // root.accept(CLLVMVisitor, arguCLLVMA);
                 System.out.println("Compilation of program in inputFile \"" + args[i] + "\" to LLVM IR succesful (file " + arguVTA.fileName + ").");
             }
             catch(ParseException ex){

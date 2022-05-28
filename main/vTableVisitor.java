@@ -13,6 +13,7 @@ import java.util.HashMap;
 
 class VTArgs {
     String fileName;
+    FileWriter writer;
     Map<String, classInfo> symbolTable;
     Map<String, OTEntry> offsetTable;
 }
@@ -57,9 +58,11 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
             System.err.println(ex.getMessage());
             throw new Exception();
         }
+        argu.writer = new FileWriter(argu.fileName);
         n.f0.accept(this, argu);
         n.f1.accept(this, argu);
         n.f2.accept(this, argu);
+        argu.writer.close();
         return null;
     }
 
@@ -85,10 +88,7 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
      */
     @Override
     public String visit(MainClass n, VTArgs argu) throws Exception {
-        FileWriter writer = new FileWriter(argu.fileName);
-        writer.write("@." + n.f1.accept(this, argu) + "_vtable = global [0 x i8*] []\n");
-        writer.close();
-        System.out.print("wrote\n" + "@." + n.f1.accept(this, argu) + "_vtable = global [0 x i8*] []\n");
+        argu.writer.write("@." + n.f1.accept(this, argu) + "_vtable = global [0 x i8*] []\n");
         return null;
     }
 
@@ -122,10 +122,7 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
             if (++vTESize < size) vTEInfo += ", ";
         }
         if (vTableEntries.put(scope, new VTEntry(vTEInfo, vTESize)) != null) throw new Exception();
-        FileWriter writer = new FileWriter(argu.fileName);
-        writer.write("@." + scope + "_vtable = global [" + vTESize + " x i8*] [" + vTEInfo + "]\n");
-        writer.close();
-        System.out.print("wrote\t" + "@." + scope + "_vtable = global [" + vTESize + " x i8*] [" + vTEInfo + "]\n");
+        argu.writer.write("@." + scope + "_vtable = global [" + vTESize + " x i8*] [" + vTEInfo + "]\n");
         return null;
     }
     
@@ -144,8 +141,6 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
         String superClass = n.f3.accept(this, argu);
         VTEntry entry;
         if ((entry = vTableEntries.get(superClass)) == null) throw new Exception();
-        // String vTEInfo = new String(entry.entry);
-        // int vTESize = new Integer(entry.size);
         String vTEInfo = entry.entry;
         int vTESize = entry.size;
         String scope = n.f1.accept(this, argu);
@@ -174,10 +169,7 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
             // alreadyDone.add(identifier);
         }
         if (vTableEntries.put(scope, new VTEntry(vTEInfo, vTESize)) != null) throw new Exception();
-        FileWriter writer = new FileWriter(argu.fileName);
-        writer.write("@." + scope + "_vtable = global [" + vTESize + " x i8*] [" + vTEInfo + "]\n");
-        writer.close();
-        System.out.print("wrote\t" + "@." + scope + "_vtable = global [" + vTESize + " x i8*] [" + vTEInfo + "]\n");
+        argu.writer.write("@." + scope + "_vtable = global [" + vTESize + " x i8*] [" + vTEInfo + "]\n");
         return null;
     }
 
