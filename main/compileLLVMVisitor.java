@@ -17,6 +17,10 @@ class CLLVMArgs {
     String scope = null, fileName = null;
 }
 
+class methInfoNode {
+    String name, retType, argTypes;
+}
+
 class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
 
     public String getTypeLLVMA(String type, CLLVMArgs argu) throws Exception {
@@ -35,7 +39,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(Goal n, CLLVMArgs argu) throws Exception {
-        if (!argu.fileName.contains("\\.java")) throw new Exception();
+        if (!argu.fileName.endsWith("\\.java")) throw new Exception();
         argu.fileName = argu.fileName.split("\\.")[0] + ".ll";
         try {
             File file = new File(argu.fileName);
@@ -47,14 +51,25 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         FileWriter writer;
         for (Map.Entry<String, classInfo> entry : argu.symbolTable.entrySet()) {
             String className = entry.getKey(), vTable = "@." + className + "_vtable = global [";
-            Map<String, methodInfo> classMethods;
-            if ((classMethods = entry.getValue().methods) == null) throw new Exception();
-            if (classMethods.containsKey("main")) {
+            classInfo classI = entry.getValue();
+            if (classI.methods.containsKey("main")) {
                 vTable += "0 x i8*] []\n";
                 writer = new FileWriter(argu.fileName);
                 writer.write(vTable);
                 writer.close();
                 continue;
+            }
+            List<methInfoNode> methInfoList = new ArrayList<methInfoNode>();
+            classInfo superClassI;
+            while ((superClassI = classI.superclass) != null) {
+                for (Map.Entry<String, methodInfo> entryIN : superClassI.methods.entrySet()) {
+                    
+                }
+            }
+            Map<String, methodInfo> classMethods;
+            if ((classMethods = classI.methods) == null) throw new Exception();
+            for (Map.Entry<String, methodInfo> entryIN : classMethods.entrySet()) {
+
             }
             int size = classMethods.size();
             vTable += size + " x i8*] [";
