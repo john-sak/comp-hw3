@@ -1,7 +1,10 @@
 import syntaxtree.*;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
+import java.io.FilenameFilter;
 import java.io.IOException;
 
 public class Main {
@@ -31,8 +34,16 @@ public class Main {
                 root.accept(OTVisitor, arguOTA);
                 System.out.println("Offset Table for program in inputFile \"" + args[i] + "\" created succesfully.");
                 // OTVisitor.printResult();
+                String fileName = args[i].split("\\.")[0] + ".ll";
+                try {
+                    File file = new File(fileName);
+                    if (!file.createNewFile()) System.err.println("File already axists.");
+                } catch (IOException ex) {
+                    System.err.println(ex.getMessage());
+                    throw new Exception();
+                }
                 VTArgs arguVTA = new VTArgs();
-                arguVTA.fileName = args[i];
+                arguVTA.writer = new FileWriter(fileName);
                 arguVTA.symbolTable = STVisitor.globalST;
                 arguVTA.offsetTable = OTVisitor.stack;
                 vTableVisitor VTVisitor = new vTableVisitor();
@@ -43,7 +54,8 @@ public class Main {
                 // arguCLLVMA.fileName = args[i];
                 // compileLLVMVisitor CLLVMVisitor = new compileLLVMVisitor();
                 // root.accept(CLLVMVisitor, arguCLLVMA);
-                System.out.println("Compilation of program in inputFile \"" + args[i] + "\" to LLVM IR succesful (file " + arguVTA.fileName + ").");
+                arguVTA.writer.close();
+                System.out.println("Compilation of program in inputFile \"" + args[i] + "\" to LLVM IR succesful (file " + fileName + ").");
             }
             catch(ParseException ex){
                 System.out.println(ex.getMessage() + " inputFile \"" + args[i] + "\"");

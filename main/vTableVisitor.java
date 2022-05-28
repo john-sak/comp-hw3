@@ -1,9 +1,7 @@
 import syntaxtree.*;
 import visitor.*;
 
-import java.io.File;
 import java.io.FileWriter;
-import java.io.IOException;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -12,7 +10,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 class VTArgs {
-    String fileName;
+    // String fileName;
     FileWriter writer;
     Map<String, classInfo> symbolTable;
     Map<String, OTEntry> offsetTable;
@@ -47,22 +45,23 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
      */
     @Override
     public String visit(Goal n, VTArgs argu) throws Exception {
-        if (argu.fileName == null || !argu.fileName.endsWith(".java")) throw new Exception();
+        if (argu.writer == null) throw new Exception();
+        // if (argu.fileName == null || !argu.fileName.endsWith(".java")) throw new Exception();
         if (argu.symbolTable == null) throw new Exception();
         if (argu.offsetTable == null) throw new Exception();
-        argu.fileName = argu.fileName.split("\\.")[0] + ".ll";
-        try {
-            File file = new File(argu.fileName);
-            if (!file.createNewFile()) System.err.println("File already exists.");
-        } catch (IOException ex) {
-            System.err.println(ex.getMessage());
-            throw new Exception();
-        }
-        argu.writer = new FileWriter(argu.fileName);
+        // argu.fileName = argu.fileName.split("\\.")[0] + ".ll";
+        // try {
+        //     File file = new File(argu.fileName);
+        //     if (!file.createNewFile()) System.err.println("File already exists.");
+        // } catch (IOException ex) {
+        //     System.err.println(ex.getMessage());
+        //     throw new Exception();
+        // }
+        // argu.writer = new FileWriter(argu.fileName);
         n.f0.accept(this, argu);
         n.f1.accept(this, argu);
         n.f2.accept(this, argu);
-        argu.writer.close();
+        // argu.writer.close();
         return null;
     }
 
