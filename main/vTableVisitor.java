@@ -5,6 +5,9 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 
+import java.util.List;
+import java.util.ArrayList;
+
 import java.util.Map;
 import java.util.HashMap;
 
@@ -151,6 +154,7 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
         OTEntry OTE;
         if ((OTE = argu.offsetTable.get(scope)) == null) throw new Exception();
         int size = OTE.methods.size();
+        List<String> alreadyDone = new ArrayList<String>();
         for (OTData data : OTE.methods) {
             methodInfo methodI;
             if ((methodI = classI.methods.get(data.identifier)) == null) throw new Exception();
@@ -160,7 +164,14 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
                 for (String arg : args) vTEInfo += ", " + getTypeLLVMA(arg);
             }
             vTEInfo += ")* @" + scope + "." + data.identifier + " to i8*)";
+            alreadyDone.add(data.identifier);
             if (++vTESize < entry.size + size) vTEInfo += ", ";
+        }
+        for (Map.Entry<String, methodInfo> methodI : classI.methods.entrySet()) {
+            String identifier = methodI.getKey();
+            if (alreadyDone.contains(identifier)) continue;
+            vTEInfo = vTEInfo.replace(superClass + "." + identifier, scope + "." + identifier);
+            // alreadyDone.add(identifier);
         }
         if (vTableEntries.put(scope, new VTEntry(vTEInfo, vTESize)) != null) throw new Exception();
         FileWriter writer = new FileWriter(argu.fileName);
