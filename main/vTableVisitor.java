@@ -1,20 +1,17 @@
 import syntaxtree.*;
 import visitor.*;
 
-import java.io.EOFException;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-
-import java.util.List;
-import java.util.ArrayList;
 
 import java.util.Map;
 import java.util.HashMap;
 
 class VTArgs {
-    String fileName, scope, vTableEntry;
-    int entryLength;
+    String fileName;
+    Map<String, classInfo> symbolTable;
+    Map<String, OTEntry> offsetTable;
 }
 
 class VTEntry {
@@ -47,6 +44,8 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
     @Override
     public String visit(Goal n, VTArgs argu) throws Exception {
         if (argu.fileName == null || !argu.fileName.endsWith(".java")) throw new Exception();
+        if (argu.symbolTable == null) throw new Exception();
+        if (argu.offsetTable == null) throw new Exception();
         argu.fileName = argu.fileName.split("\\.")[0] + ".ll";
         try {
             File file = new File(argu.fileName);
@@ -86,6 +85,7 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
         FileWriter writer = new FileWriter(argu.fileName);
         writer.write("@." + n.f1.accept(this, argu) + "_vtable = global [0 x i8*] []\n");
         writer.close();
+        System.out.print("wrote\n" + "@." + n.f1.accept(this, argu) + "_vtable = global [0 x i8*] []\n");
         return null;
     }
 
@@ -99,15 +99,30 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
      */
     @Override
     public String visit(ClassDeclaration n, VTArgs argu) throws Exception {
-        argu.scope = n.f1.accept(this, argu);
-        argu.vTableEntry = "";
-        argu.entryLength = 0;
-        n.f4.accept(this, argu);
-        if (argu.vTableEntry.endsWith(", ")) argu.vTableEntry = argu.vTableEntry.substring(0, argu.vTableEntry.length() - 2);
-        if (vTableEntries.put(argu.scope, new VTEntry(argu.vTableEntry, argu.entryLength)) != null) throw new Exception();
+        String scope = n.f1.accept(this, argu);
+        String vTEInfo = "";
+        int vTESize = 0;
+        classInfo classI;
+        if ((classI = argu.symbolTable.get(scope)) == null) throw new Exception();
+        OTEntry OTE;
+        if ((OTE = argu.offsetTable.get(scope)) == null) throw new Exception();
+        int size = OTE.methods.size();
+        for (OTData data : OTE.methods) {
+            methodInfo methodI;
+            if ((methodI = classI.methods.get(data.identifier)) == null) throw new Exception();
+            vTEInfo += "i8* bitcast (" + getTypeLLVMA(methodI.returnValue) + " (i8*";
+            if (methodI.argNum != 0) {
+                String[] args = methodI.argTypes.split(", ");
+                for (String arg : args) vTEInfo += ", " + getTypeLLVMA(arg);
+            }
+            vTEInfo += ")* @" + scope + "." + data.identifier + " to i8*)";
+            if (++vTESize < size) vTEInfo += ", ";
+        }
+        if (vTableEntries.put(scope, new VTEntry(vTEInfo, vTESize)) != null) throw new Exception();
         FileWriter writer = new FileWriter(argu.fileName);
-        writer.write("@." + argu.scope + "_vtable = global [" + argu.entryLength + " x i8*] [" + argu.vTableEntry + "]");
+        writer.write("@." + scope + "_vtable = global [" + vTESize + " x i8*] [" + vTEInfo + "]\n");
         writer.close();
+        System.out.print("wrote\t" + "@." + scope + "_vtable = global [" + vTESize + " x i8*] [" + vTEInfo + "]\n");
         return null;
     }
     
@@ -123,67 +138,43 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
      */
     @Override
     public String visit(ClassExtendsDeclaration n, VTArgs argu) throws Exception {
-        argu.scope = n.f1.accept(this, argu);
-        String extnd = n.f3.accept(this, argu);
-        argu.vTableEntry = "";
-        argu.entryLength = 0;
-        n.f6.accept(this, argu);
-        if (argu.vTableEntry.endsWith(", ")) argu.vTableEntry = argu.vTableEntry.substring(0, argu.vTableEntry.length() - 2);
-        VTEntry entrySuper;
-        if ((entrySuper = vTableEntries.get(extnd)) == null) throw new Exception();
-        // clean vTableSuper and vTableThis
-        String vTableEntryNew = entrySuper.entry + ", " + argu.vTableEntry;
-        int vTableEntrySize = entrySuper.size + argu.entryLength;
-        if (vTableEntries.put(argu.scope, new VTEntry(vTableEntryNew, vTableEntrySize)) != null) throw new Exception();
+        String superClass = n.f3.accept(this, argu);
+        VTEntry entry;
+        if ((entry = vTableEntries.get(superClass)) == null) throw new Exception();
+        // String vTEInfo = new String(entry.entry);
+        // int vTESize = new Integer(entry.size);
+        String vTEInfo = entry.entry;
+        int vTESize = entry.size;
+        String scope = n.f1.accept(this, argu);
+        classInfo classI;
+        if ((classI = argu.symbolTable.get(scope)) == null) throw new Exception();
+        OTEntry OTE;
+        if ((OTE = argu.offsetTable.get(scope)) == null) throw new Exception();
+        int size = OTE.methods.size();
+        for (OTData data : OTE.methods) {
+            methodInfo methodI;
+            if ((methodI = classI.methods.get(data.identifier)) == null) throw new Exception();
+            vTEInfo += "i8* bitcast (" + getTypeLLVMA(methodI.returnValue) + " (i8*";
+            if (methodI.argNum != 0) {
+                String[] args = methodI.argTypes.split(", ");
+                for (String arg : args) vTEInfo += ", " + getTypeLLVMA(arg);
+            }
+            vTEInfo += ")* @" + scope + "." + data.identifier + " to i8*)";
+            if (++vTESize < entry.size + size) vTEInfo += ", ";
+        }
+        if (vTableEntries.put(scope, new VTEntry(vTEInfo, vTESize)) != null) throw new Exception();
         FileWriter writer = new FileWriter(argu.fileName);
-        writer.write("@." + argu.scope + "_vtable = global [" + vTableEntrySize + " x i8*] [" + vTableEntryNew + "]");
+        writer.write("@." + scope + "_vtable = global [" + vTESize + " x i8*] [" + vTEInfo + "]\n");
         writer.close();
+        System.out.print("wrote\t" + "@." + scope + "_vtable = global [" + vTESize + " x i8*] [" + vTEInfo + "]\n");
         return null;
     }
 
     /**
-     * f0 -> Type()
-     * f1 -> Identifier()
-     * f2 -> ";"
+     * f0 -> <IDENTIFIER>
      */
     @Override
-    public String visit(VarDeclaration n, CLLVMArgs argu) throws Exception {
-        return null;
-    }
-
-    /**
-     * f0 -> "public"
-     * f1 -> Type()
-     * f2 -> Identifier()
-     * f3 -> "("
-     * f4 -> ( FormalParameterList() )?
-     * f5 -> ")"
-     * f6 -> "{"
-     * f7 -> ( VarDeclaration() )*
-     * f8 -> ( Statement() )*
-     * f9 -> "return"
-     * f10 -> Expression()
-     * f11 -> ";"
-     * f12 -> "}"
-     */
-    @Override
-    public String visit(MethodDeclaration n, VTArgs argu) throws Exception {
-        String retType = n.f1.accept(this, argu), methName = n.f2.accept(this, argu);
-        String vTableEntry = "@." + argu.scope + "_vtable = global [";
-
-        FileWriter writer = new FileWriter(argu.fileName);
-        writer.write("\ndefine " + getTypeLLVMA(retType) + " @" + argu.scope + "." + methName + "(i8* %this");
-        writer.close();
-        String oldArgu = argu.scope;
-        argu.scope += "->" + methName;
-        String params = n.f4.accept(this, argu);
-        // todo
-        n.f8.accept(this, argu);
-        String ret = n.f10.accept(this, argu);
-        writer = new FileWriter(argu.fileName);
-        writer.write("ret " + ret + "\n");
-        writer.close();
-        argu.scope = oldArgu;
-        return null;
+    public String visit(Identifier n, VTArgs argu) throws Exception {
+        return n.f0.toString();
     }
 }
