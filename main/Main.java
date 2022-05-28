@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
-import java.io.FilenameFilter;
 import java.io.IOException;
 
 public class Main {
@@ -48,12 +47,12 @@ public class Main {
                 arguVTA.offsetTable = OTVisitor.stack;
                 vTableVisitor VTVisitor = new vTableVisitor();
                 root.accept(VTVisitor, arguVTA);
-                // CLLVMArgs arguCLLVMA = new CLLVMArgs();
-                // arguCLLVMA.symbolTable = STVisitor.globalST;
-                // arguCLLVMA.offsetTable = OTVisitor.stack;
-                // arguCLLVMA.fileName = args[i];
-                // compileLLVMVisitor CLLVMVisitor = new compileLLVMVisitor();
-                // root.accept(CLLVMVisitor, arguCLLVMA);
+                CLLVMArgs arguCLLVMA = new CLLVMArgs();
+                arguCLLVMA.writer = arguVTA.writer;
+                arguCLLVMA.symbolTable = STVisitor.globalST;
+                arguCLLVMA.offsetTable = OTVisitor.stack;
+                compileLLVMVisitor CLLVMVisitor = new compileLLVMVisitor();
+                root.accept(CLLVMVisitor, arguCLLVMA);
                 arguVTA.writer.close();
                 System.out.println("Compilation of program in inputFile \"" + args[i] + "\" to LLVM IR succesful (file " + fileName + ").");
             }
