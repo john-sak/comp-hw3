@@ -167,8 +167,6 @@ class typeCheckVisitor extends GJDepthFirst<String, TCArgs> {
         return null;
     }
 
-
-
     /**
      * f0 -> Type()
      * f1 -> Identifier()

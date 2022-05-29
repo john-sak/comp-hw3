@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.HashMap;
 
 class VTArgs {
-    // String fileName;
     FileWriter writer;
     Map<String, classInfo> symbolTable;
     Map<String, OTEntry> offsetTable;
@@ -46,22 +45,10 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
     @Override
     public String visit(Goal n, VTArgs argu) throws Exception {
         if (argu.writer == null) throw new Exception();
-        // if (argu.fileName == null || !argu.fileName.endsWith(".java")) throw new Exception();
         if (argu.symbolTable == null) throw new Exception();
         if (argu.offsetTable == null) throw new Exception();
-        // argu.fileName = argu.fileName.split("\\.")[0] + ".ll";
-        // try {
-        //     File file = new File(argu.fileName);
-        //     if (!file.createNewFile()) System.err.println("File already exists.");
-        // } catch (IOException ex) {
-        //     System.err.println(ex.getMessage());
-        //     throw new Exception();
-        // }
-        // argu.writer = new FileWriter(argu.fileName);
         n.f0.accept(this, argu);
         n.f1.accept(this, argu);
-        n.f2.accept(this, argu);
-        // argu.writer.close();
         return null;
     }
 
@@ -165,7 +152,6 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
             String identifier = methodI.getKey();
             if (alreadyDone.contains(identifier)) continue;
             vTEInfo = vTEInfo.replace(superClass + "." + identifier, scope + "." + identifier);
-            // alreadyDone.add(identifier);
         }
         if (vTableEntries.put(scope, new VTEntry(vTEInfo, vTESize)) != null) throw new Exception();
         argu.writer.write("@." + scope + "_vtable = global [" + vTESize + " x i8*] [" + vTEInfo + "]\n");
