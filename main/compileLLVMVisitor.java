@@ -16,6 +16,15 @@ class CLLVMArgs {
     Map<String, OTEntry> offsetTable = null;
 }
 
+class paramInfoNode {
+    String identifier, type;
+
+    paramInfoNode(String identifier, String type) {
+        this.identifier = identifier;
+        this.type = type;
+    }
+}
+
 class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
 
     public String getTypeLLVMA(String type) throws Exception {
@@ -67,14 +76,14 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(MainClass n, CLLVMArgs argu) throws Exception {
-        argu.writer.write("\ndefine i32 @main() {\n");
         String oldArgu = argu.scope;
         argu.scope = n.f1.accept(this, argu) + "->main";
+        argu.writer.write("\ndefine i32 @main() {\n");
         argu.writer.write("\tinside\n");
         // n.f14.accept(this, argu);
         // n.f15.accept(this, argu);
+        argu.writer.write("\tret i32 0\n}\n");
         argu.scope = oldArgu;
-        argu.writer.write("}\n");
         return null;
     }
     
@@ -113,16 +122,19 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.scope = oldArgu;
         return null;
     }
-
-    // /**
-    //  * f0 -> Type()
-    //  * f1 -> Identifier()
-    //  * f2 -> ";"
-    //  */
-    // @Override
-    // public String visit(VarDeclaration n, CLLVMArgs argu) throws Exception {
-    //     return null;
-    // }
+    
+    /**
+     * f0 -> Type()
+     * f1 -> Identifier()
+     * f2 -> ";"
+     */
+    @Override
+    public String visit(VarDeclaration n, CLLVMArgs argu) throws Exception {
+        if (!argu.scope.contains("->")) throw new Exception();
+        String type = n.f0.accept(this, argu), identifier = n.f1.accept(this, argu);
+        argu.writer.write("\t%" + identifier + " = alloca " + getTypeLLVMA(type) + "\n");
+        return null;
+    }
     
     /**
      * f0 -> "public"
@@ -141,27 +153,28 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(MethodDeclaration n, CLLVMArgs argu) throws Exception {
+        String oldArgu = argu.scope, methName = n.f2.accept(this, argu);
+        argu.scope += "->" + methName;
         classInfo classI;
-        if ((classI = argu.symbolTable.get(argu.scope)) == null) throw new Exception();
-        String methName = n.f2.accept(this, argu);
+        if ((classI = argu.symbolTable.get(oldArgu)) == null) throw new Exception();
         methodInfo methodI;
         if ((methodI = classI.methods.get(methName)) == null) throw new Exception();
-        argu.writer.write("\ndefine " + getTypeLLVMA(methodI.returnValue) + " @" + argu.scope + "." + methName + "(i8* %this");
-        if (methodI.argNum > 0) for (String arg : methodI.argTypes.split(", ")) argu.writer.write(", " + getTypeLLVMA(arg));
+        argu.writer.write("\ndefine " + getTypeLLVMA(methodI.returnValue) + " @" + oldArgu + "." + methName + "(i8* %this");
+        List<paramInfoNode> listInfo = new ArrayList<paramInfoNode>();
         if (n.f4.present())
-            for (String param : n.f4.accept(this, argu).split(", ")) {
-                String[] temp = param.split(" ");
+        for (String param : n.f4.accept(this, argu).split(", ")) {
+            String[] temp = param.split(" ");
                 if (temp.length != 2) throw new Exception();
+                listInfo.add(new paramInfoNode(temp[1], temp[0]));
                 argu.writer.write(", " + getTypeLLVMA(temp[0]) + " %." + temp[1]);
             }
         argu.writer.write(") {\n");
-        String oldArgu = argu.scope;
-        argu.scope += "->" + methName;
+        for (paramInfoNode node : listInfo) argu.writer.write("\t%" + node.identifier + " = alloca " + getTypeLLVMA(node.type) + "\n");
+        n.f7.accept(this, argu);
         argu.writer.write("\tinside\n");
-        argu.writer.write("}\n");
-        // n.f7.accept(this, argu);
         // n.f8.accept(this, argu);
         // argu.writer.write("\tret " + n.f10.accept(this, argu) + ";\n}\n");
+        argu.writer.write("}\n");
         argu.scope = oldArgu;
         return null;
     }
