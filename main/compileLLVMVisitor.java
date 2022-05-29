@@ -79,8 +79,8 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         String oldArgu = argu.scope;
         argu.scope = n.f1.accept(this, argu) + "->main";
         argu.writer.write("\ndefine i32 @main() {\n");
+        n.f14.accept(this, argu);
         argu.writer.write("\tinside\n");
-        // n.f14.accept(this, argu);
         // n.f15.accept(this, argu);
         argu.writer.write("\tret i32 0\n}\n");
         argu.scope = oldArgu;
