@@ -80,8 +80,8 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.scope = n.f1.accept(this, argu) + "->main";
         argu.writer.write("\ndefine i32 @main() {\n");
         n.f14.accept(this, argu);
-        argu.writer.write("\tinside\n");
-        // n.f15.accept(this, argu);
+        // argu.writer.write("\tinside\n");
+        n.f15.accept(this, argu);
         argu.writer.write("\tret i32 0\n}\n");
         argu.scope = oldArgu;
         return null;
@@ -169,10 +169,13 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
                 argu.writer.write(", " + getTypeLLVMA(temp[0]) + " %." + temp[1]);
             }
         argu.writer.write(") {\n");
-        for (paramInfoNode node : listInfo) argu.writer.write("\t%" + node.identifier + " = alloca " + getTypeLLVMA(node.type) + "\n");
+        for (paramInfoNode node : listInfo) {
+            String typeLLVM = getTypeLLVMA(node.type);
+            argu.writer.write("\t%" + node.identifier + " = alloca " + typeLLVM + "\n\tstore " + typeLLVM + " %." + node.identifier + ", " + typeLLVM + "* %" + node.identifier + "\n");
+        }
         n.f7.accept(this, argu);
-        argu.writer.write("\tinside\n");
-        // n.f8.accept(this, argu);
+        // argu.writer.write("\tinside\n");
+        n.f8.accept(this, argu);
         // argu.writer.write("\tret " + n.f10.accept(this, argu) + ";\n}\n");
         argu.writer.write("}\n");
         argu.scope = oldArgu;
@@ -250,6 +253,18 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         return "int";
     }
 
+    /**
+     * ***** STATEMENT *****
+     * f0 -> Block()
+     *       | AssignmentStatement()
+     *       | ArrayAssignmentStatement()
+     *       | IfStatement()
+     *       | WhileStatement()
+     *       | PrintStatement()
+     */
+
+    
+    
     /**
      * f0 -> <IDENTIFIER>
      */
