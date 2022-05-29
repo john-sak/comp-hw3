@@ -14,6 +14,7 @@ class CLLVMArgs {
     FileWriter writer = null;
     Map<String, classInfo> symbolTable = null;
     Map<String, OTEntry> offsetTable = null;
+    int tabs = 0, regCount = 0;
 }
 
 class paramInfoNode {
@@ -76,13 +77,18 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(MainClass n, CLLVMArgs argu) throws Exception {
+        argu.writer.write("\ndefine i32 @main() {\n");
         String oldArgu = argu.scope;
         argu.scope = n.f1.accept(this, argu) + "->main";
-        argu.writer.write("\ndefine i32 @main() {\n");
+        int oldRegCount = argu.regCount;
+        argu.regCount = 0;
+        argu.tabs++;
         n.f14.accept(this, argu);
         // argu.writer.write("\tinside\n");
         n.f15.accept(this, argu);
-        argu.writer.write("\tret i32 0\n}\n");
+        argu.writer.write("\t".repeat(argu.tabs) + "ret i32 0\n}\n");
+        argu.regCount = oldRegCount;
+        argu.tabs--;
         argu.scope = oldArgu;
         return null;
     }
@@ -132,7 +138,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(VarDeclaration n, CLLVMArgs argu) throws Exception {
         if (!argu.scope.contains("->")) throw new Exception();
         String type = n.f0.accept(this, argu), identifier = n.f1.accept(this, argu);
-        argu.writer.write("\t%" + identifier + " = alloca " + getTypeLLVMA(type) + "\n");
+        argu.writer.write("\t".repeat(argu.tabs) + "%" + identifier + " = alloca " + getTypeLLVMA(type) + "\n");
         return null;
     }
     
@@ -155,6 +161,9 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(MethodDeclaration n, CLLVMArgs argu) throws Exception {
         String oldArgu = argu.scope, methName = n.f2.accept(this, argu);
         argu.scope += "->" + methName;
+        int oldRegCount = argu.regCount;
+        argu.regCount = 0;
+        argu.tabs++;
         classInfo classI;
         if ((classI = argu.symbolTable.get(oldArgu)) == null) throw new Exception();
         methodInfo methodI;
@@ -164,20 +173,22 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if (n.f4.present())
         for (String param : n.f4.accept(this, argu).split(", ")) {
             String[] temp = param.split(" ");
-                if (temp.length != 2) throw new Exception();
-                listInfo.add(new paramInfoNode(temp[1], temp[0]));
-                argu.writer.write(", " + getTypeLLVMA(temp[0]) + " %." + temp[1]);
-            }
+            if (temp.length != 2) throw new Exception();
+            listInfo.add(new paramInfoNode(temp[1], temp[0]));
+            argu.writer.write(", " + getTypeLLVMA(temp[0]) + " %." + temp[1]);
+        }
         argu.writer.write(") {\n");
         for (paramInfoNode node : listInfo) {
             String typeLLVM = getTypeLLVMA(node.type);
-            argu.writer.write("\t%" + node.identifier + " = alloca " + typeLLVM + "\n\tstore " + typeLLVM + " %." + node.identifier + ", " + typeLLVM + "* %" + node.identifier + "\n");
+            argu.writer.write("\t".repeat(argu.tabs) + "%" + node.identifier + " = alloca " + typeLLVM + "\n\tstore " + typeLLVM + " %." + node.identifier + ", " + typeLLVM + "* %" + node.identifier + "\n");
         }
         n.f7.accept(this, argu);
         // argu.writer.write("\tinside\n");
         n.f8.accept(this, argu);
         // argu.writer.write("\tret " + n.f10.accept(this, argu) + ";\n}\n");
         argu.writer.write("}\n");
+        argu.regCount = oldRegCount;
+        argu.tabs--;
         argu.scope = oldArgu;
         return null;
     }
@@ -255,7 +266,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
 
     /**
      * ***** STATEMENT *****
-     * f0 -> Block()
      *       | AssignmentStatement()
      *       | ArrayAssignmentStatement()
      *       | IfStatement()
@@ -263,8 +273,34 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      *       | PrintStatement()
      */
 
+    /**
+     * f0 -> "{"
+     * f1 -> ( Statement() )*
+     * f2 -> "}"
+     */
+    @Override
+    public String visit(Block n, CLLVMArgs argu) throws Exception {
+        argu.tabs++;
+        n.f1.accept(this, argu);
+        argu.tabs--;
+        return null;
+    }
     
-    
+    /**
+     * f0 -> Identifier()
+     * f1 -> "="
+     * f2 -> Expression()
+     * f3 -> ";"
+     */
+    @Override
+    public String visit(AssignmentStatement n, CLLVMArgs argu) throws Exception {
+        String res = n.f2.accept(this, argu);
+        argu.writer.write("\t".repeat(argu.tabs) + "%_" + ++argu.regCount + " = getelementptr i8, ");
+        // todo
+        argu.writer.write("\t".repeat(argu.tabs) + "store " + type + " " + res + ", " + type + "* " + here + "\n");
+        return null;
+    }
+
     /**
      * f0 -> <IDENTIFIER>
      */
