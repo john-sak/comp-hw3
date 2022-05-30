@@ -345,9 +345,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         n.f2.accept(this, argu);
         if (argu.result == null || argu.resType == null) throw new Exception();
         String ID = n.f0.accept(this, argu), hereType = getTypeLLVMA(resolveIdentifier(ID, argu)), hereLoc;
-        if (methodI.localVars.containsKey(ID)) {
-            hereLoc = "%" + ID;
-        }
+        if (methodI.localVars.containsKey(ID)) hereLoc = "%" + ID;
         else {
             argu.writeLine("%_" + ++argu.regCount + " = getelementptr i8, i8* this, i32 " + getOffestVar(ID, argu));
             argu.writeLine("%_" + ++argu.regCount + " = bitcast i8* %_" + (argu.regCount - 1) + " to " + hereType + "*");
