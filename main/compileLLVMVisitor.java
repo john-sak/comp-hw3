@@ -10,11 +10,16 @@ import java.util.Map;
 import java.util.HashMap;
 
 class CLLVMArgs {
-    String scope = null;
+    String scope = null, result = null, resType = null;
     FileWriter writer = null;
     Map<String, classInfo> symbolTable = null;
     Map<String, OTEntry> offsetTable = null;
     int tabs = 0, regCount = 0;
+
+    public void writeLine(String str) throws Exception {
+        this.writer.write("\t".repeat(this.tabs) + str + "\n");
+        return;
+    }
 }
 
 class paramInfoNode {
@@ -36,6 +41,28 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         else return "i8*";
     }
 
+    public String resolveIdentifier(String ID, CLLVMArgs argu) throws Exception {
+        String[] scope = argu.scope.split("->");
+        classInfo classI;
+        if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
+        if (argu.scope.contains("->")) {
+            methodInfo methodI;
+            if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
+            if (ID.compareTo("this") == 0) return classI.name;
+            fieldInfo fieldI;
+            if ((fieldI = methodI.localVars.get(ID)) != null) return fieldI.type;
+            while (classI != null) {
+                if ((fieldI = classI.fields.get(ID)) != null) return fieldI.type;
+                classI = classI.superclass;
+            }
+        }
+        throw new Exception();
+    }
+
+    public int getOffestVar(String identifier, CLLVMArgs argu) throws Exception {
+        throw new Exception();
+    }
+
     /**
      * f0 -> MainClass()
      * f1 -> ( TypeDeclaration() )*
@@ -46,10 +73,26 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if (argu.writer == null) throw new Exception();
         if (argu.symbolTable == null) throw new Exception();
         if (argu.offsetTable == null) throw new Exception();
-        argu.writer.write("\ndeclare i8* @calloc(i32, i32)\ndeclare i32 @printf(i8*, ...)\ndeclare void @exit(i32)\n");
-        argu.writer.write("\n@_cint = constant [4 x i8] c\"%d\\0a\\00\"\n@_cOOB = constant [15 x i8] c\"Out of bounds\\0a\\00\"\n");
-        argu.writer.write("\ndefine void @print_int(i32 %i) {\n\t%_str = bitcast [4 x i8]* @_cint to i8*\n\tcall i32 (i8*, ...) @printf(i8* %_str, i32 %i)\n\tret void\n}\n");
-        argu.writer.write("\ndefine voide @throw_oob() {\n\t%_str = bitcast [15 x i8]* @cOOB to i8*\n\tcall i32 (i8*, ...) @printf(i8* %_str)\n\tcall void @exit(i32 1)\n\tret void\n}\n");
+        // argu.writer.write("\ndeclare i8* @calloc(i32, i32)\ndeclare i32 @printf(i8*, ...)\ndeclare void @exit(i32)\n");
+        // argu.writer.write("\n@_cint = constant [4 x i8] c\"%d\\0a\\00\"\n@_cOOB = constant [15 x i8] c\"Out of bounds\\0a\\00\"\n");
+        // argu.writer.write("\ndefine void @print_int(i32 %i) {\n\t%_str = bitcast [4 x i8]* @_cint to i8*\n\tcall i32 (i8*, ...) @printf(i8* %_str, i32 %i)\n\tret void\n}\n");
+        // argu.writer.write("\ndefine voide @throw_oob() {\n\t%_str = bitcast [15 x i8]* @cOOB to i8*\n\tcall i32 (i8*, ...) @printf(i8* %_str)\n\tcall void @exit(i32 1)\n\tret void\n}\n");
+        argu.writeLine("declare i8* @calloc(i32, i32)");
+        argu.writeLine("declare i32 @printf(i8*, ...)");
+        argu.writeLine("declare void @exit(i32)\n");
+        argu.writeLine("@_cint = constant [4 x i8] c\"%d\\0a\\00\"");
+        argu.writeLine("@_cOOB = constant [15 x i8] c\"Out of bounds\\0a\\00\"\n");
+        argu.writeLine("define void @print_int(i32 %i) {");
+        argu.writeLine("\t%_str = bitcast [4 x i8]* @_cint to i8*");
+        argu.writeLine("\tcall i32 (i8*, ...) @printf(i8* %_str, i32 %i)");
+        argu.writeLine("\tret void");
+        argu.writeLine("}\n");
+        argu.writeLine("define voide @throw_oob() {");
+        argu.writeLine("\t%_str = bitcast [15 x i8]* @cOOB to i8*");
+        argu.writeLine("\tcall i32 (i8*, ...) @printf(i8* %_str)");
+        argu.writeLine("\tcall void @exit(i32 1)");
+        argu.writeLine("\tret void");
+        argu.writeLine("}\n");
         n.f0.accept(this, argu);
         n.f1.accept(this, argu);
         return null;
@@ -77,18 +120,18 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(MainClass n, CLLVMArgs argu) throws Exception {
-        argu.writer.write("\ndefine i32 @main() {\n");
+        argu.writeLine("define i32 @main() {");
         String oldArgu = argu.scope;
         argu.scope = n.f1.accept(this, argu) + "->main";
         int oldRegCount = argu.regCount;
         argu.regCount = 0;
         argu.tabs++;
         n.f14.accept(this, argu);
-        // argu.writer.write("\tinside\n");
         n.f15.accept(this, argu);
-        argu.writer.write("\t".repeat(argu.tabs) + "ret i32 0\n}\n");
-        argu.regCount = oldRegCount;
+        argu.writeLine("ret i32 0");
         argu.tabs--;
+        argu.writeLine("}\n");
+        argu.regCount = oldRegCount;
         argu.scope = oldArgu;
         return null;
     }
@@ -138,7 +181,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(VarDeclaration n, CLLVMArgs argu) throws Exception {
         if (!argu.scope.contains("->")) throw new Exception();
         String type = n.f0.accept(this, argu), identifier = n.f1.accept(this, argu);
-        argu.writer.write("\t".repeat(argu.tabs) + "%" + identifier + " = alloca " + getTypeLLVMA(type) + "\n");
+        argu.writeLine("%" + identifier + " = alloca " + getTypeLLVMA(type));
         return null;
     }
     
@@ -163,12 +206,12 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.scope += "->" + methName;
         int oldRegCount = argu.regCount;
         argu.regCount = 0;
-        argu.tabs++;
         classInfo classI;
         if ((classI = argu.symbolTable.get(oldArgu)) == null) throw new Exception();
         methodInfo methodI;
         if ((methodI = classI.methods.get(methName)) == null) throw new Exception();
-        argu.writer.write("\ndefine " + getTypeLLVMA(methodI.returnValue) + " @" + oldArgu + "." + methName + "(i8* %this");
+        argu.writer.write("define " + getTypeLLVMA(methodI.returnValue) + " @" + oldArgu + "." + methName + "(i8* %this");
+        argu.tabs++;
         List<paramInfoNode> listInfo = new ArrayList<paramInfoNode>();
         if (n.f4.present())
         for (String param : n.f4.accept(this, argu).split(", ")) {
@@ -180,15 +223,15 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writer.write(") {\n");
         for (paramInfoNode node : listInfo) {
             String typeLLVM = getTypeLLVMA(node.type);
-            argu.writer.write("\t".repeat(argu.tabs) + "%" + node.identifier + " = alloca " + typeLLVM + "\n\tstore " + typeLLVM + " %." + node.identifier + ", " + typeLLVM + "* %" + node.identifier + "\n");
+            argu.writeLine("%" + node.identifier + " = alloca " + typeLLVM);
+            argu.writeLine("store " + typeLLVM + " %." + node.identifier + ", " + typeLLVM + "* %" + node.identifier);
         }
         n.f7.accept(this, argu);
-        // argu.writer.write("\tinside\n");
         n.f8.accept(this, argu);
         // argu.writer.write("\tret " + n.f10.accept(this, argu) + ";\n}\n");
-        argu.writer.write("}\n");
-        argu.regCount = oldRegCount;
         argu.tabs--;
+        argu.writeLine("}\n");
+        argu.regCount = oldRegCount;
         argu.scope = oldArgu;
         return null;
     }
@@ -266,7 +309,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
 
     /**
      * ***** STATEMENT *****
-     *       | AssignmentStatement()
      *       | ArrayAssignmentStatement()
      *       | IfStatement()
      *       | WhileStatement()
@@ -294,10 +336,26 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(AssignmentStatement n, CLLVMArgs argu) throws Exception {
-        String res = n.f2.accept(this, argu);
-        argu.writer.write("\t".repeat(argu.tabs) + "%_" + ++argu.regCount + " = getelementptr i8, ");
-        // todo
-        argu.writer.write("\t".repeat(argu.tabs) + "store " + type + " " + res + ", " + type + "* " + here + "\n");
+        if (!argu.scope.contains("->")) throw new Exception();
+        String[] scope = argu.scope.split("->");
+        classInfo classI;
+        if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
+        methodInfo methodI;
+        if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
+        n.f2.accept(this, argu);
+        if (argu.result == null || argu.resType == null) throw new Exception();
+        String ID = n.f0.accept(this, argu), hereType = getTypeLLVMA(resolveIdentifier(ID, argu)), hereLoc;
+        if (methodI.localVars.containsKey(ID)) {
+            hereLoc = "%" + ID;
+        }
+        else {
+            argu.writeLine("%_" + ++argu.regCount + " = getelementptr i8, i8* this, i32 " + getOffestVar(ID, argu));
+            argu.writeLine("%_" + ++argu.regCount + " = bitcast i8* %_" + (argu.regCount - 1) + " to " + hereType + "*");
+            hereLoc = "%_" + argu.regCount;
+        }
+        argu.writeLine("store " + argu.resType + " " + argu.result + ", " + hereType + "* " + hereLoc);
+        argu.result = hereLoc;
+        argu.resType = hereType;
         return null;
     }
 

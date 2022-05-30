@@ -49,6 +49,7 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
         if (argu.offsetTable == null) throw new Exception();
         n.f0.accept(this, argu);
         n.f1.accept(this, argu);
+        argu.writer.write("\n");
         return null;
     }
 
