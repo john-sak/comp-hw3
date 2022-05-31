@@ -14,15 +14,15 @@ class CLLVMArgs {
     FileWriter writer = null;
     Map<String, classInfo> symbolTable = null;
     Map<String, OTEntry> offsetTable = null;
-    int tabs = 0, regCount = 0, ifCount = 0, loopCount = 0;
+    int tabs = 0, regCount = 0, ifCount = 0, loopCount = 0, andCount = 0;
 
     public void writeLine(String str) throws Exception {
         this.writer.write("\t".repeat(this.tabs) + str + "\n");
         return;
     }
 
-    public void writeLine(String str, int tabs) throws Exception {
-        this.writer.write("\t".repeat(tabs) + str + "\n");
+    public void writeLabel(String str) throws Exception {
+        this.writer.write(str + ":\n");
         return;
     }
 }
@@ -33,6 +33,7 @@ class paramInfoNode {
     paramInfoNode(String identifier, String type) {
         this.identifier = identifier;
         this.type = type;
+        return;
     }
 }
 
@@ -44,6 +45,23 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         else if (type.compareTo("boolean") == 0) return "i1";
         else if (type.compareTo("int") == 0) return "i32";
         else return "i8*";
+    }
+
+    public void getIdentifier(String identifier, CLLVMArgs argu) throws Exception {
+        if (!argu.scope.contains("->")) throw new Exception();
+        String[] scope = argu.scope.split("->");
+        classInfo classI;
+        if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
+        methodInfo methodI;
+        if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
+        argu.resType = getTypeLLVMA(resolveIdentifier(identifier, argu));
+        if (methodI.localVars.containsKey(identifier)) argu.resReg = "%" + identifier;
+        else {
+            argu.writeLine("%_" + argu.regCount++ + " = getelementptr i8, i8* this, i32 " + getOffsetVar(identifier, argu));
+            argu.writeLine("%_" + argu.regCount++ + " = bitcast i8* %_" + (argu.regCount - 2) + " to " + argu.resType + "*");
+            argu.resReg = "%_" + (argu.regCount - 1);
+        }
+        return;
     }
 
     public String resolveIdentifier(String ID, CLLVMArgs argu) throws Exception {
@@ -93,7 +111,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         throw new Exception();
     }
 
-    public void arrayLookup(String identifier, CLLVMArgs argu) throws Exception {
+    public void arrayLookup(String identifier, String register, String type, CLLVMArgs argu) throws Exception {
         throw new Exception();
     }
 
@@ -364,22 +382,26 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(AssignmentStatement n, CLLVMArgs argu) throws Exception {
-        if (!argu.scope.contains("->")) throw new Exception();
-        String[] scope = argu.scope.split("->");
-        classInfo classI;
-        if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
-        methodInfo methodI;
-        if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
+        getIdentifier(n.f0.accept(this, argu), argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        String idReg = argu.resReg, idType = argu.resType;
+        // if (!argu.scope.contains("->")) throw new Exception();
+        // String[] scope = argu.scope.split("->");
+        // classInfo classI;
+        // if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
+        // methodInfo methodI;
+        // if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
         n.f2.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        String ID = n.f0.accept(this, argu), hereType = getTypeLLVMA(resolveIdentifier(ID, argu)), hereLoc;
-        if (methodI.localVars.containsKey(ID)) hereLoc = "%" + ID;
-        else {
-            argu.writeLine("%_" + argu.regCount++ + " = getelementptr i8, i8* this, i32 " + getOffsetVar(ID, argu));
-            argu.writeLine("%_" + argu.regCount++ + " = bitcast i8* %_" + (argu.regCount - 2) + " to " + hereType + "*");
-            hereLoc = "%_" + (argu.regCount - 1);
-        }
-        argu.writeLine("store " + argu.resType + " " + argu.resReg + ", " + hereType + "* " + hereLoc);
+        String exprReg = argu.resReg, exprType = argu.resType;
+        // String ID = n.f0.accept(this, argu), hereType = getTypeLLVMA(resolveIdentifier(ID, argu)), hereLoc;
+        // if (methodI.localVars.containsKey(ID)) hereLoc = "%" + ID;
+        // else {
+            //     argu.writeLine("%_" + argu.regCount++ + " = getelementptr i8, i8* this, i32 " + getOffsetVar(ID, argu));
+            //     argu.writeLine("%_" + argu.regCount++ + " = bitcast i8* %_" + (argu.regCount - 2) + " to " + hereType + "*");
+            //     hereLoc = "%_" + (argu.regCount - 1);
+            // }
+        argu.writeLine("store " + exprType + " " + exprReg + ", " + idType + "* " + idReg);
         return null;
     }
     
@@ -400,17 +422,17 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         // if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
         // methodInfo methodI;
         // if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
-        String ID = n.f0.accept(this, argu), hereType, hereLoc;
+        String ID = n.f0.accept(this, argu);
         n.f2.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        arrayLookup(ID, argu);
+        arrayLookup(ID, argu.resReg, argu.resType, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        hereLoc = argu.resReg;
-        hereType = argu.resType;
+        String idReg = argu.resReg, idType = argu.resType;
         n.f5.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
+        String exprReg = argu.resReg, exprType = argu.resType;
         // hereType = argu.resType OR hereType = getTypeLLVMA(resolveIdentifier(ID, argu)) ?
-        argu.writeLine("store " + argu.resType + " " + argu.resReg + ", " + hereType + "* " + hereLoc);
+        argu.writeLine("store " + exprType + " " + exprReg + ", " + idType + "* " + idReg);
         return null;
     }
     
@@ -427,17 +449,17 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(IfStatement n, CLLVMArgs argu) throws Exception {
         n.f2.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        String label1 = "%if" + argu.ifCount++, label2 = "%if" + argu.ifCount++, label3 = "%if" + argu.ifCount++;
+        String label1 = "if" + argu.ifCount++, label2 = "if" + argu.ifCount++, label3 = "if" + argu.ifCount++;
         argu.writeLine("br " + argu.resType + " " + argu.resReg + ", label %" + label1 + ", label %" + label2);
         argu.tabs++;
-        argu.writeLine(label1 + ":", 0);
+        argu.writeLabel(label1);
         n.f4.accept(this, argu);
         argu.writeLine("br label %" + label3);
-        argu.writeLine(label2 + ":", 0);
+        argu.writeLabel(label2);
         n.f5.accept(this, argu);
         argu.writeLine("br label %" + label3);
         argu.tabs--;
-        argu.writeLine(label3 + ":", 0);
+        argu.writeLabel(label3);
         return null;
     }
 
@@ -450,18 +472,18 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(WhileStatement n, CLLVMArgs argu) throws Exception {
-        String label1 = "%loop" + argu.loopCount++, label2 = "%loop" + argu.loopCount++, label3 = "%loop" + argu.loopCount++;
-        argu.writeLine("br label " + label1);
-        argu.writeLine(label1 + ":", 0);
+        String label1 = "loop" + argu.loopCount++, label2 = "loop" + argu.loopCount++, label3 = "loop" + argu.loopCount++;
+        argu.writeLine("br label %" + label1);
+        argu.writeLabel(label1);
         n.f2.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        argu.writeLine("br " + argu.resType + " " + argu.resReg + ", label " + label2 + ", label " + label3);
+        argu.writeLine("br " + argu.resType + " " + argu.resReg + ", label %" + label2 + ", label %" + label3);
         argu.tabs++;
-        argu.writeLine(label2 + ":", 0);
+        argu.writeLabel(label2);
         n.f4.accept(this, argu);
-        argu.writeLine("br label " + label1);
+        argu.writeLine("br label %" + label1);
         argu.tabs--;
-        argu.writeLine(label3 + ":", 0);
+        argu.writeLabel(label3);
         return null;
     }
 
@@ -482,7 +504,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     }
 
     /**
-     * f0 -> AndExpression()
      *       | CompareExpression()
      *       | PlusExpression()
      *       | MinusExpression()
@@ -492,6 +513,37 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      *       | MessageSend()
      *       | Clause()
      */
+
+    /**
+     * f0 -> Clause()
+     * f1 -> "&&"
+     * f2 -> Clause()
+     */
+    @Override
+    public String visit(AndExpression n, CLLVMArgs argu) throws Exception {
+        String label1 = "andclause" + argu.andCount++, label2 = "andclause" + argu.andCount++, label3 = "andclause" + argu.andCount++, label4 = "andclause" + argu.andCount++, label5 = "andclause" + argu.andCount++;
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i1") != 0) throw new Exception();
+        String cl1Reg = argu.resReg;
+        argu.writeLabel("br label %" + label1);
+        argu.writeLabel(label1);
+        argu.writeLine("br i1 " + cl1Reg + ", label %" + label2 + ", label %" + label3);
+        argu.writeLabel(label2);
+        n.f2.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i1") != 0) throw new Exception();
+        String cl2Reg = argu.resReg;
+        argu.writeLine("br label %" + label4);
+        argu.writeLabel(label4);
+        argu.writeLine("br label %" + label3);
+        argu.writeLabel(label3);
+        String exprRes = "%_" + argu.regCount++;
+        argu.writeLine("%_" + exprRes + " = phi i1 [ 0, %" + label1 + " ], [ " + cl2Reg + ", %" + label4 + " ]");
+        argu.resReg = exprRes;
+        argu.resType = "i1";
+        return null;
+    }
 
     /**
      * f0 -> <IDENTIFIER>
