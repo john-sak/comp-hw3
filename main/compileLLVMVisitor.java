@@ -83,19 +83,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     }
 
     public int getOffsetVar(String identifier, CLLVMArgs argu) throws Exception {
-        // String[] scope = argu.scope.split("->");
-        // if (scope.length != 2) throw new Exception();
-        // classInfo thisClass = argu.symbolTable.get(scope[0]);
-        // int offset = -1;
-        // while (thisClass != null) {
-        //     OTEntry entry = argu.offsetTable.get(scope[0]);
-        //     if (entry == null) throw new Exception();
-        //     for (OTData data : entry.variables) {
-
-        //     }
-        // }
-        // if (offset < 0) throw new Exception();
-        // else return offset;
         return 0;
     }
 
@@ -280,7 +267,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         }
         n.f7.accept(this, argu);
         n.f8.accept(this, argu);
-        // argu.writer.write("\tret " + n.f10.accept(this, argu) + ";\n}\n");
         n.f10.accept(this, argu);
         argu.writeLine("ret " + argu.resType + " " + argu.resReg);
         argu.tabs--;
@@ -385,22 +371,9 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         getIdentifier(n.f0.accept(this, argu), argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         String idReg = argu.resReg, idType = argu.resType;
-        // if (!argu.scope.contains("->")) throw new Exception();
-        // String[] scope = argu.scope.split("->");
-        // classInfo classI;
-        // if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
-        // methodInfo methodI;
-        // if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
         n.f2.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         String exprReg = argu.resReg, exprType = argu.resType;
-        // String ID = n.f0.accept(this, argu), hereType = getTypeLLVMA(resolveIdentifier(ID, argu)), hereLoc;
-        // if (methodI.localVars.containsKey(ID)) hereLoc = "%" + ID;
-        // else {
-            //     argu.writeLine("%_" + argu.regCount++ + " = getelementptr i8, i8* this, i32 " + getOffsetVar(ID, argu));
-            //     argu.writeLine("%_" + argu.regCount++ + " = bitcast i8* %_" + (argu.regCount - 2) + " to " + hereType + "*");
-            //     hereLoc = "%_" + (argu.regCount - 1);
-            // }
         argu.writeLine("store " + exprType + " " + exprReg + ", " + idType + "* " + idReg);
         return null;
     }
@@ -416,12 +389,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(ArrayAssignmentStatement n, CLLVMArgs argu) throws Exception {
-        // if (!argu.scope.contains("->")) throw new Exception();
-        // String[] scope = argu.scope.split("->");
-        // classInfo classI;
-        // if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
-        // methodInfo methodI;
-        // if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
         String ID = n.f0.accept(this, argu);
         n.f2.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
