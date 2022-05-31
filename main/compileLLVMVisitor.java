@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 class CLLVMArgs {
-    String scope = null, result = null, resType = null;
+    String scope = null, resReg = null, resType = null;
     FileWriter writer = null;
     Map<String, classInfo> symbolTable = null;
     Map<String, OTEntry> offsetTable = null;
@@ -59,7 +59,29 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         throw new Exception();
     }
 
-    public int getOffestVar(String identifier, CLLVMArgs argu) throws Exception {
+    public int getOffsetVar(String identifier, CLLVMArgs argu) throws Exception {
+        String[] scope = argu.scope.split("->");
+        if (scope.length != 2) throw new Exception();
+        classInfo thisClass = argu.symbolTable.get(scope[0]);
+        int offset = -1;
+        // if ((thisClass = argu.symbolTable.get(scope[0])) == null) throw new Exception();
+        while (thisClass != null) {
+            OTEntry entry = argu.offsetTable.get(scope[0]);
+            if (entry == null) throw new Exception();
+            for (OTData data : entry.variables) {
+                
+            }
+        }
+        if (offset < 0) throw new Exception();
+        else return offset;
+    }
+
+    public int getOffsetMeth(String identifier, CLLVMArgs argu) throws Exception {
+        return 1;
+        // throw new Exception();
+    }
+
+    public void arrayLookup(String identifier, CLLVMArgs argu) throws Exception {
         throw new Exception();
     }
 
@@ -73,25 +95,25 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if (argu.writer == null) throw new Exception();
         if (argu.symbolTable == null) throw new Exception();
         if (argu.offsetTable == null) throw new Exception();
-        // argu.writer.write("\ndeclare i8* @calloc(i32, i32)\ndeclare i32 @printf(i8*, ...)\ndeclare void @exit(i32)\n");
-        // argu.writer.write("\n@_cint = constant [4 x i8] c\"%d\\0a\\00\"\n@_cOOB = constant [15 x i8] c\"Out of bounds\\0a\\00\"\n");
-        // argu.writer.write("\ndefine void @print_int(i32 %i) {\n\t%_str = bitcast [4 x i8]* @_cint to i8*\n\tcall i32 (i8*, ...) @printf(i8* %_str, i32 %i)\n\tret void\n}\n");
-        // argu.writer.write("\ndefine voide @throw_oob() {\n\t%_str = bitcast [15 x i8]* @cOOB to i8*\n\tcall i32 (i8*, ...) @printf(i8* %_str)\n\tcall void @exit(i32 1)\n\tret void\n}\n");
         argu.writeLine("declare i8* @calloc(i32, i32)");
         argu.writeLine("declare i32 @printf(i8*, ...)");
         argu.writeLine("declare void @exit(i32)\n");
         argu.writeLine("@_cint = constant [4 x i8] c\"%d\\0a\\00\"");
         argu.writeLine("@_cOOB = constant [15 x i8] c\"Out of bounds\\0a\\00\"\n");
         argu.writeLine("define void @print_int(i32 %i) {");
-        argu.writeLine("\t%_str = bitcast [4 x i8]* @_cint to i8*");
-        argu.writeLine("\tcall i32 (i8*, ...) @printf(i8* %_str, i32 %i)");
-        argu.writeLine("\tret void");
+        argu.tabs++;
+        argu.writeLine("%_str = bitcast [4 x i8]* @_cint to i8*");
+        argu.writeLine("call i32 (i8*, ...) @printf(i8* %_str, i32 %i)");
+        argu.writeLine("ret void");
+        argu.tabs--;
         argu.writeLine("}\n");
         argu.writeLine("define voide @throw_oob() {");
-        argu.writeLine("\t%_str = bitcast [15 x i8]* @cOOB to i8*");
-        argu.writeLine("\tcall i32 (i8*, ...) @printf(i8* %_str)");
-        argu.writeLine("\tcall void @exit(i32 1)");
-        argu.writeLine("\tret void");
+        argu.tabs++;
+        argu.writeLine("%_str = bitcast [15 x i8]* @cOOB to i8*");
+        argu.writeLine("call i32 (i8*, ...) @printf(i8* %_str)");
+        argu.writeLine("call void @exit(i32 1)");
+        argu.writeLine("ret void");
+        argu.tabs--;
         argu.writeLine("}\n");
         n.f0.accept(this, argu);
         n.f1.accept(this, argu);
@@ -210,8 +232,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if ((classI = argu.symbolTable.get(oldArgu)) == null) throw new Exception();
         methodInfo methodI;
         if ((methodI = classI.methods.get(methName)) == null) throw new Exception();
-        argu.writer.write("define " + getTypeLLVMA(methodI.returnValue) + " @" + oldArgu + "." + methName + "(i8* %this");
-        argu.tabs++;
+        argu.writeLine("define " + getTypeLLVMA(methodI.returnValue) + " @" + oldArgu + "." + methName + "(i8* %this");
         List<paramInfoNode> listInfo = new ArrayList<paramInfoNode>();
         if (n.f4.present())
         for (String param : n.f4.accept(this, argu).split(", ")) {
@@ -221,6 +242,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
             argu.writer.write(", " + getTypeLLVMA(temp[0]) + " %." + temp[1]);
         }
         argu.writer.write(") {\n");
+        argu.tabs++;
         for (paramInfoNode node : listInfo) {
             String typeLLVM = getTypeLLVMA(node.type);
             argu.writeLine("%" + node.identifier + " = alloca " + typeLLVM);
@@ -229,6 +251,8 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         n.f7.accept(this, argu);
         n.f8.accept(this, argu);
         // argu.writer.write("\tret " + n.f10.accept(this, argu) + ";\n}\n");
+        n.f10.accept(this, argu);
+        argu.writeLine("ret " + argu.resType + " " + argu.resReg);
         argu.tabs--;
         argu.writeLine("}\n");
         argu.regCount = oldRegCount;
@@ -309,7 +333,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
 
     /**
      * ***** STATEMENT *****
-     *       | ArrayAssignmentStatement()
      *       | IfStatement()
      *       | WhileStatement()
      *       | PrintStatement()
@@ -342,21 +365,57 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
         methodInfo methodI;
         if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
-        n.f2.accept(this, argu);
-        if (argu.result == null || argu.resType == null) throw new Exception();
+        // n.f2.accept(this, argu);
+        argu.resReg = "res";
+        argu.resType = "resT";
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
         String ID = n.f0.accept(this, argu), hereType = getTypeLLVMA(resolveIdentifier(ID, argu)), hereLoc;
         if (methodI.localVars.containsKey(ID)) hereLoc = "%" + ID;
         else {
-            argu.writeLine("%_" + ++argu.regCount + " = getelementptr i8, i8* this, i32 " + getOffestVar(ID, argu));
-            argu.writeLine("%_" + ++argu.regCount + " = bitcast i8* %_" + (argu.regCount - 1) + " to " + hereType + "*");
-            hereLoc = "%_" + argu.regCount;
+            argu.writeLine("%_" + argu.regCount++ + " = getelementptr i8, i8* this, i32 " + getOffsetVar(ID, argu));
+            argu.writeLine("%_" + argu.regCount++ + " = bitcast i8* %_" + (argu.regCount - 2) + " to " + hereType + "*");
+            hereLoc = "%_" + (argu.regCount - 1);
         }
-        argu.writeLine("store " + argu.resType + " " + argu.result + ", " + hereType + "* " + hereLoc);
-        argu.result = hereLoc;
+        argu.writeLine("store " + argu.resType + " " + argu.resReg + ", " + hereType + "* " + hereLoc);
+        argu.resReg = hereLoc;
         argu.resType = hereType;
         return null;
     }
-
+    
+    /**
+     * f0 -> Identifier()
+     * f1 -> "["
+     * f2 -> Expression()
+     * f3 -> "]"
+     * f4 -> "="
+     * f5 -> Expression()
+     * f6 -> ";"
+     */
+    @Override
+    public String visit(ArrayAssignmentStatement n, CLLVMArgs argu) throws Exception {
+        if (!argu.scope.contains("->")) throw new Exception();
+        String[] scope = argu.scope.split("->");
+        classInfo classI;
+        if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
+        methodInfo methodI;
+        if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
+        n.f2.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        // String ID = n.f0.accept(this, argu), hereType = getTypeLLVMA(resolveIdentifier(ID, argu)), hereLoc;
+        String ID = n.f0.accept(this, argu), hereType, hereLoc;
+        arrayLookup(ID, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        hereLoc = argu.resReg;
+        hereType = argu.resType;
+        n.f5.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        // hereType = argu.resType OR hereType ?
+        argu.writeLine("store " + argu.resType + " " + argu.resReg + ", " + hereType + "* " + hereLoc);
+        argu.resReg = hereLoc;
+        argu.resType = hereType;        
+        return null;
+    }
+    
     /**
      * f0 -> <IDENTIFIER>
      */
