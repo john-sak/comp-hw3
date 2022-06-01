@@ -30,8 +30,8 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
     public Map<String, VTEntry> vTableEntries = new HashMap<String, VTEntry>();
 
     public String getTypeLLVMA(String type) throws Exception {
-        if (type.compareTo("boolean[]") == 0) return "i1*";
-        else if (type.compareTo("int[]") == 0) return "i32*";
+        if (type.compareTo("boolean[]") == 0) return "%_BooleanArray";
+        else if (type.compareTo("int[]") == 0) return "%_IntegerArray";
         else if (type.compareTo("boolean") == 0) return "i1";
         else if (type.compareTo("int") == 0) return "i32";
         else return "i8*";
@@ -47,6 +47,8 @@ class vTableVisitor extends GJDepthFirst<String, VTArgs> {
         if (argu.writer == null) throw new Exception();
         if (argu.symbolTable == null) throw new Exception();
         if (argu.offsetTable == null) throw new Exception();
+        argu.writer.write("%_BooleanArray = type { i32, i1* }\n");
+        argu.writer.write("%_IntegerArray = type { i32, i32* }\n\n");
         n.f0.accept(this, argu);
         n.f1.accept(this, argu);
         argu.writer.write("\n");
