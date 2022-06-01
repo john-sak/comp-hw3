@@ -39,7 +39,7 @@ class paramInfoNode {
 
 class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
 
-    public String getTypeLLVMA(String type) throws Exception {
+    public String getTypeLLVM(String type) throws Exception {
         if (type.compareTo("boolean[]") == 0) return "i1*";
         else if (type.compareTo("int[]") == 0) return "i32*";
         else if (type.compareTo("boolean") == 0) return "i1";
@@ -54,7 +54,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
         methodInfo methodI;
         if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
-        argu.resType = getTypeLLVMA(resolveIdentifier(identifier, argu));
+        argu.resType = getTypeLLVM(resolveIdentifier(identifier, argu));
         if (methodI.localVars.containsKey(identifier)) argu.resReg = "%" + identifier;
         else {
             String reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++;
@@ -163,7 +163,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine("define i32 @main() {");
         String oldArgu = argu.scope;
         argu.scope = n.f1.accept(this, argu) + "->main";
-        // int oldRegCount = argu.regCount;
         argu.regCount = 0;
         argu.tabs++;
         n.f14.accept(this, argu);
@@ -171,7 +170,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine("ret i32 0");
         argu.tabs--;
         argu.writeLine("}\n");
-        // argu.regCount = oldRegCount;
         argu.scope = oldArgu;
         return null;
     }
@@ -221,7 +219,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(VarDeclaration n, CLLVMArgs argu) throws Exception {
         if (!argu.scope.contains("->")) throw new Exception();
         String type = n.f0.accept(this, argu), identifier = n.f1.accept(this, argu);
-        argu.writeLine("%" + identifier + " = alloca " + getTypeLLVMA(type));
+        argu.writeLine("%" + identifier + " = alloca " + getTypeLLVM(type));
         return null;
     }
     
@@ -249,25 +247,26 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if ((classI = argu.symbolTable.get(oldArgu)) == null) throw new Exception();
         methodInfo methodI;
         if ((methodI = classI.methods.get(methName)) == null) throw new Exception();
-        argu.writeLine("define " + getTypeLLVMA(methodI.returnValue) + " @" + oldArgu + "." + methName + "(i8* %this");
+        argu.writeLine("define " + getTypeLLVM(methodI.returnValue) + " @" + oldArgu + "." + methName + "(i8* %this");
         List<paramInfoNode> listInfo = new ArrayList<paramInfoNode>();
         if (n.f4.present())
-        for (String param : n.f4.accept(this, argu).split(", ")) {
-            String[] temp = param.split(" ");
-            if (temp.length != 2) throw new Exception();
-            listInfo.add(new paramInfoNode(temp[1], temp[0]));
-            argu.writer.write(", " + getTypeLLVMA(temp[0]) + " %." + temp[1]);
-        }
+            for (String param : n.f4.accept(this, argu).split(", ")) {
+                String[] temp = param.split(" ");
+                if (temp.length != 2) throw new Exception();
+                listInfo.add(new paramInfoNode(temp[1], temp[0]));
+                argu.writer.write(", " + getTypeLLVM(temp[0]) + " %." + temp[1]);
+            }
         argu.writer.write(") {\n");
         argu.tabs++;
         for (paramInfoNode node : listInfo) {
-            String typeLLVM = getTypeLLVMA(node.type);
+            String typeLLVM = getTypeLLVM(node.type);
             argu.writeLine("%" + node.identifier + " = alloca " + typeLLVM);
             argu.writeLine("store " + typeLLVM + " %." + node.identifier + ", " + typeLLVM + "* %" + node.identifier);
         }
         n.f7.accept(this, argu);
         n.f8.accept(this, argu);
         n.f10.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
         argu.writeLine("ret " + argu.resType + " " + argu.resReg);
         argu.tabs--;
         argu.writeLine("}\n");
@@ -397,7 +396,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         arrayLookup(n.f0.accept(this, argu), argu.resReg, argu.resType, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         String idReg = argu.resReg, idType = argu.resType;
-        // hereType = argu.resType OR hereType = getTypeLLVMA(resolveIdentifier(ID, argu)) ?
+        // hereType = argu.resType OR hereType = getTypeLLVM(resolveIdentifier(ID, argu)) ?
         argu.writeLine("store " + exprType + " " + exprReg + ", " + idType + "* " + idReg);
         return null;
     }
@@ -659,6 +658,47 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     n.f5.accept(this, argu);
     return _ret;
     }
+
+    /**
+     * f0 -> Expression()
+     * f1 -> ExpressionTail()
+     */
+    @Override
+    public String visit(ExpressionList n, CLLVMArgs argu) throws Exception {
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        return argu.resType + n.f1.accept(this, argu);
+    }
+
+    /**
+     * f0 -> ( ExpressionTerm() )*
+     */
+    @Override
+    public String visit(ExpressionTail n, CLLVMArgs argu) throws Exception {
+        return n.f0.present() ? n.f0.accept(this, argu) : "";
+    }
+
+    /**
+     * f0 -> ","
+     * f1 -> Expression()
+     */
+    @Override
+    public String visit(ExpressionTerm n, CLLVMArgs argu) throws Exception {
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        return ", " + argu.resType;
+    }
+
+    /**
+     * f0 -> IntegerLiteral()
+     *       | TrueLiteral()
+     *       | FalseLiteral()
+     *       | Identifier()
+     *       | ThisExpression()
+     *       | ArrayAllocationExpression()
+     *       | AllocationExpression()
+     *       | BracketExpression()
+     */
 
     /**
      * f0 -> <IDENTIFIER>
