@@ -14,7 +14,7 @@ class CLLVMArgs {
     FileWriter writer = null;
     Map<String, classInfo> symbolTable = null;
     Map<String, OTEntry> offsetTable = null;
-    int tabs = 0, regCount = 0, ifCount = 0, loopCount = 0, andCount = 0;
+    int tabs = 0, regCount = 0, ifCount = 0, loopCount = 0, andCount = 0, oobCount = 0;
 
     public void writeLine(String str) throws Exception {
         this.writer.write("\t".repeat(this.tabs) + str + "\n");
@@ -57,9 +57,10 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.resType = getTypeLLVMA(resolveIdentifier(identifier, argu));
         if (methodI.localVars.containsKey(identifier)) argu.resReg = "%" + identifier;
         else {
-            argu.writeLine("%_" + argu.regCount++ + " = getelementptr i8, i8* this, i32 " + getOffsetVar(identifier, argu));
-            argu.writeLine("%_" + argu.regCount++ + " = bitcast i8* %_" + (argu.regCount - 2) + " to " + argu.resType + "*");
-            argu.resReg = "%_" + (argu.regCount - 1);
+            String reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++;
+            argu.writeLine(reg1 + " = getelementptr i8, i8* this, i32 " + getOffsetVar(identifier, argu));
+            argu.writeLine(reg2 + " = bitcast i8* " + reg1 + " to " + argu.resType + "*");
+            argu.resReg = reg2;
         }
         return;
     }
@@ -162,7 +163,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine("define i32 @main() {");
         String oldArgu = argu.scope;
         argu.scope = n.f1.accept(this, argu) + "->main";
-        int oldRegCount = argu.regCount;
+        // int oldRegCount = argu.regCount;
         argu.regCount = 0;
         argu.tabs++;
         n.f14.accept(this, argu);
@@ -170,7 +171,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine("ret i32 0");
         argu.tabs--;
         argu.writeLine("}\n");
-        argu.regCount = oldRegCount;
+        // argu.regCount = oldRegCount;
         argu.scope = oldArgu;
         return null;
     }
@@ -243,7 +244,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(MethodDeclaration n, CLLVMArgs argu) throws Exception {
         String oldArgu = argu.scope, methName = n.f2.accept(this, argu);
         argu.scope += "->" + methName;
-        int oldRegCount = argu.regCount;
         argu.regCount = 0;
         classInfo classI;
         if ((classI = argu.symbolTable.get(oldArgu)) == null) throw new Exception();
@@ -271,7 +271,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine("ret " + argu.resType + " " + argu.resReg);
         argu.tabs--;
         argu.writeLine("}\n");
-        argu.regCount = oldRegCount;
         argu.scope = oldArgu;
         return null;
     }
@@ -368,12 +367,12 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(AssignmentStatement n, CLLVMArgs argu) throws Exception {
-        getIdentifier(n.f0.accept(this, argu), argu);
-        if (argu.resReg == null || argu.resType == null) throw new Exception();
-        String idReg = argu.resReg, idType = argu.resType;
         n.f2.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         String exprReg = argu.resReg, exprType = argu.resType;
+        getIdentifier(n.f0.accept(this, argu), argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        String idReg = argu.resReg, idType = argu.resType;
         argu.writeLine("store " + exprType + " " + exprReg + ", " + idType + "* " + idReg);
         return null;
     }
@@ -389,15 +388,15 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(ArrayAssignmentStatement n, CLLVMArgs argu) throws Exception {
-        String ID = n.f0.accept(this, argu);
-        n.f2.accept(this, argu);
-        if (argu.resReg == null || argu.resType == null) throw new Exception();
-        arrayLookup(ID, argu.resReg, argu.resType, argu);
-        if (argu.resReg == null || argu.resType == null) throw new Exception();
-        String idReg = argu.resReg, idType = argu.resType;
         n.f5.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         String exprReg = argu.resReg, exprType = argu.resType;
+        n.f2.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i32") != 0) throw new Exception();
+        arrayLookup(n.f0.accept(this, argu), argu.resReg, argu.resType, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        String idReg = argu.resReg, idType = argu.resType;
         // hereType = argu.resType OR hereType = getTypeLLVMA(resolveIdentifier(ID, argu)) ?
         argu.writeLine("store " + exprType + " " + exprReg + ", " + idType + "* " + idReg);
         return null;
@@ -471,11 +470,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     }
 
     /**
-     *       | CompareExpression()
-     *       | PlusExpression()
-     *       | MinusExpression()
-     *       | TimesExpression()
-     *       | ArrayLookup()
      *       | ArrayLength()
      *       | MessageSend()
      *       | Clause()
@@ -488,7 +482,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(AndExpression n, CLLVMArgs argu) throws Exception {
-        String label1 = "andclause" + argu.andCount++, label2 = "andclause" + argu.andCount++, label3 = "andclause" + argu.andCount++, label4 = "andclause" + argu.andCount++, label5 = "andclause" + argu.andCount++;
+        String label1 = "andclause" + argu.andCount++, label2 = "andclause" + argu.andCount++, label3 = "andclause" + argu.andCount++, label4 = "andclause" + argu.andCount++;
         n.f0.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         if (argu.resType.compareTo("i1") != 0) throw new Exception();
@@ -505,11 +499,165 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLabel(label4);
         argu.writeLine("br label %" + label3);
         argu.writeLabel(label3);
-        String exprRes = "%_" + argu.regCount++;
-        argu.writeLine("%_" + exprRes + " = phi i1 [ 0, %" + label1 + " ], [ " + cl2Reg + ", %" + label4 + " ]");
-        argu.resReg = exprRes;
+        String resRes = "%_" + argu.regCount++;
+        argu.writeLine(resRes + " = phi i1 [ 0, %" + label1 + " ], [ " + cl2Reg + ", %" + label4 + " ]");
+        argu.resReg = resRes;
         argu.resType = "i1";
         return null;
+    }
+
+    /**
+     * f0 -> PrimaryExpression()
+     * f1 -> "<"
+     * f2 -> PrimaryExpression()
+     */
+    @Override
+    public String visit(CompareExpression n, CLLVMArgs argu) throws Exception {
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i32") != 0) throw new Exception();
+        String expr1Reg = argu.resReg;
+        n.f2.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i32") != 0) throw new Exception();
+        String expr2Reg = argu.resReg, resReg = "%_" + argu.regCount++;
+        argu.writeLine(resReg + " = icmp slt i32 " + expr1Reg + ", " + expr2Reg);
+        argu.resReg = resReg;
+        argu.resType = "i1";
+        return null;
+    }
+    
+    /**
+     * f0 -> PrimaryExpression()
+     * f1 -> "+"
+     * f2 -> PrimaryExpression()
+     */
+    @Override
+    public String visit(PlusExpression n, CLLVMArgs argu) throws Exception {
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i32") != 0) throw new Exception();
+        String expr1Reg = argu.resReg;
+        n.f2.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i32") != 0) throw new Exception();
+        String expr2Reg = argu.resReg, resReg = "%_" + argu.regCount++;
+        argu.writeLine(resReg + " = add i32 " + expr1Reg + ", " + expr2Reg);
+        argu.resReg = resReg;
+        argu.resType = "i32";
+        return null;
+    }
+    
+    /**
+     * f0 -> PrimaryExpression()
+     * f1 -> "-"
+     * f2 -> PrimaryExpression()
+     */
+    @Override
+    public String visit(MinusExpression n, CLLVMArgs argu) throws Exception {
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i32") != 0) throw new Exception();
+        String expr1Reg = argu.resReg;
+        n.f2.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i32") != 0) throw new Exception();
+        String expr2Reg = argu.resReg, resReg = "%_" + argu.regCount++;
+        argu.writeLine(resReg + " = sub i32 " + expr1Reg + ", " + expr2Reg);
+        argu.resReg = resReg;
+        argu.resType = "i32";
+        return null;
+    }
+    
+    /**
+     * f0 -> PrimaryExpression()
+     * f1 -> "*"
+     * f2 -> PrimaryExpression()
+     */
+    @Override
+    public String visit(TimesExpression n, CLLVMArgs argu) throws Exception {
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i32") != 0) throw new Exception();
+        String expr1Reg = argu.resReg;
+        n.f2.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i32") != 0) throw new Exception();
+        String expr2Reg = argu.resReg, resReg = "%_" + argu.regCount++;
+        argu.writeLine(resReg + " = mul i32 " + expr1Reg + ", " + expr2Reg);
+        argu.resReg = resReg;
+        argu.resType = "i32";
+        return null;
+    }
+
+    /**
+     * f0 -> PrimaryExpression()
+     * f1 -> "["
+     * f2 -> PrimaryExpression()
+     * f3 -> "]"
+     */
+    @Override
+    public String visit(ArrayLookup n, CLLVMArgs argu) throws Exception {
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (!argu.resType.endsWith("*")) throw new Exception();
+        String expr1Reg = argu.resReg, expr1Type = argu.resType.substring(0, argu.resType.length() - 1);
+        n.f2.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i32") != 0) throw new Exception();
+        String expr2Reg = argu.resReg;
+        String reg1 = "%_" + argu.regCount++;
+        argu.writeLine(reg1 + " = load " + expr1Type + ", " + expr1Type + " *" + expr1Reg);
+        String reg2 = "%_" + argu.regCount++;
+        argu.writeLine(reg2 + " = icmp ult i32 " + expr2Reg + ", " + reg1);
+        String label1 = "oob" + argu.oobCount++, label2 = "oob" + argu.oobCount++, label3 = "oob" + argu.oobCount++;
+        argu.writeLine("br i1 " + reg2 + ", label %" + label1 + ", label %" + label2);
+        argu.writeLabel(label1);
+        String reg3 = "%_" + argu.regCount++, reg4 = "%_" + argu.regCount++, reg5 = "%_" + argu.regCount++;
+        argu.writeLine(reg3 + " = add i32 " + expr2Reg + ", 1");
+        argu.writeLine(reg4 + " = getelementptr " + expr1Type + ", " + expr1Type + "* " + expr1Reg + ", i32 " + reg3);
+        argu.writeLine(reg5 + " = load " + expr1Type + ", " + expr1Type + "* " + reg4);
+        String resReg = reg5;
+        argu.writeLine("br label %" + label3);
+        argu.writeLine("br label %" + label3);
+        argu.writeLabel(label2);
+        argu.writeLine("call void @throw_oob()");
+        argu.writeLine("br label %" + label3);
+        argu.writeLabel(label3);
+        argu.writeLine("call void (i32) @print_int(i32 " + resReg + ")");
+        return null;
+    }
+
+    /**
+     * f0 -> PrimaryExpression()
+    * f1 -> "."
+    * f2 -> "length"
+    */
+    public R visit(ArrayLength n, A argu) throws Exception {
+    R _ret=null;
+    n.f0.accept(this, argu);
+    n.f1.accept(this, argu);
+    n.f2.accept(this, argu);
+    return _ret;
+    }
+
+    /**
+     * f0 -> PrimaryExpression()
+    * f1 -> "."
+    * f2 -> Identifier()
+    * f3 -> "("
+    * f4 -> ( ExpressionList() )?
+    * f5 -> ")"
+    */
+    public R visit(MessageSend n, A argu) throws Exception {
+    R _ret=null;
+    n.f0.accept(this, argu);
+    n.f1.accept(this, argu);
+    n.f2.accept(this, argu);
+    n.f3.accept(this, argu);
+    n.f4.accept(this, argu);
+    n.f5.accept(this, argu);
+    return _ret;
     }
 
     /**
