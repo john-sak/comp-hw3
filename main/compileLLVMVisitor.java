@@ -40,8 +40,8 @@ class paramInfoNode {
 class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
 
     public String getTypeLLVM(String type) throws Exception {
-        if (type.compareTo("boolean[]") == 0) return "i1*";
-        else if (type.compareTo("int[]") == 0) return "i32*";
+        if (type.compareTo("boolean[]") == 0) return "%_BooleanArray";
+        else if (type.compareTo("int[]") == 0) return "%_IntegerArray";
         else if (type.compareTo("boolean") == 0) return "i1";
         else if (type.compareTo("int") == 0) return "i32";
         else return "i8*";
@@ -54,12 +54,12 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
         methodInfo methodI;
         if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
-        argu.resType = getTypeLLVM(resolveIdentifier(identifier, argu));
+        argu.resType = getTypeLLVM(resolveIdentifier(identifier, argu)) + "*";
         if (methodI.localVars.containsKey(identifier)) argu.resReg = "%" + identifier;
         else {
             String reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++;
             argu.writeLine(reg1 + " = getelementptr i8, i8* this, i32 " + getOffsetVar(identifier, argu));
-            argu.writeLine(reg2 + " = bitcast i8* " + reg1 + " to " + argu.resType + "*");
+            argu.writeLine(reg2 + " = bitcast i8* " + reg1 + " to " + argu.resType);
             argu.resReg = reg2;
         }
         return;
@@ -99,9 +99,9 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         throw new Exception();
     }
 
-    public void arrayLookup(String identifier, String register, String type, CLLVMArgs argu) throws Exception {
-        throw new Exception();
-    }
+    // public void arrayLookup(String identifier, String register, String type, CLLVMArgs argu) throws Exception {
+    //     throw new Exception();
+    // }
 
     /**
      * f0 -> MainClass()
@@ -372,7 +372,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         getIdentifier(n.f0.accept(this, argu), argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         String idReg = argu.resReg, idType = argu.resType;
-        argu.writeLine("store " + exprType + " " + exprReg + ", " + idType + "* " + idReg);
+        argu.writeLine("store " + exprType + " " + exprReg + ", " + idType + " " + idReg);
         return null;
     }
     
@@ -387,17 +387,31 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(ArrayAssignmentStatement n, CLLVMArgs argu) throws Exception {
-        n.f5.accept(this, argu);
+        n.f0.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        String exprReg = argu.resReg, exprType = argu.resType;
+        if (!argu.resType.endsWith("Array*")) throw new Exception();
+        String expr1Reg = argu.resReg, expr1TypeNoPtr = argu.resType.substring(0, argu.resType.length() - 1), arrayType = expr1TypeNoPtr.compareTo("%_BooleanArray") == 0 ? "i1" : "i32";
         n.f2.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         if (argu.resType.compareTo("i32") != 0) throw new Exception();
-        arrayLookup(n.f0.accept(this, argu), argu.resReg, argu.resType, argu);
+        String expr2Reg = argu.resReg, reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++, reg3 = "%_" + argu.regCount++;
+        String label1 = "oob" + argu.oobCount++, label2 = "oob" + argu.oobCount++, label3 = "oob" + argu.oobCount++;
+        argu.writeLine(reg1 + " = getelementptr " + expr1TypeNoPtr + ", " + expr1TypeNoPtr + "* " + expr1Reg + ", i32 0, i32 0");
+        argu.writeLine(reg2 + " = load i32, i32* " + reg1);
+        argu.writeLine(reg3 + " = icmp ult i32 " + expr2Reg + ", " + reg2);
+        argu.writeLine("br i1 " + reg3 + ", label %" + label1 + ", label %" + label2);
+        argu.writeLabel(label1);
+        String reg4 = "%_" + argu.regCount++, reg5 = "%_" + argu.regCount++;
+        argu.writeLine(reg4 + " = getelementptr " + expr1TypeNoPtr + ", " + expr1TypeNoPtr + "* " + expr1Reg + ", i32 0, i32 1");
+        argu.writeLine(reg5 + " = getelementptr " + arrayType + ", " + arrayType + "* " + reg4 + ", i32 " + reg2);
+        n.f5.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        String idReg = argu.resReg, idType = argu.resType;
-        // hereType = argu.resType OR hereType = getTypeLLVM(resolveIdentifier(ID, argu)) ?
-        argu.writeLine("store " + exprType + " " + exprReg + ", " + idType + "* " + idReg);
+        argu.writeLine("store " + argu.resType + " " + argu.resReg + ", " + arrayType + "* " + reg5);
+        argu.writeLine("br label %" + label3);
+        argu.writeLabel(label2);
+        argu.writeLine("call void @throw_oob()");
+        argu.writeLine("br label %" + label3);
+        argu.writeLabel(label3);
         return null;
     }
     
@@ -414,8 +428,9 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(IfStatement n, CLLVMArgs argu) throws Exception {
         n.f2.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i1") != 0) throw new Exception();
         String label1 = "if" + argu.ifCount++, label2 = "if" + argu.ifCount++, label3 = "if" + argu.ifCount++;
-        argu.writeLine("br " + argu.resType + " " + argu.resReg + ", label %" + label1 + ", label %" + label2);
+        argu.writeLine("br i1 " + argu.resReg + ", label %" + label1 + ", label %" + label2);
         argu.tabs++;
         argu.writeLabel(label1);
         n.f4.accept(this, argu);
@@ -442,7 +457,8 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLabel(label1);
         n.f2.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        argu.writeLine("br " + argu.resType + " " + argu.resReg + ", label %" + label2 + ", label %" + label3);
+        if (argu.resType.compareTo("i1") != 0) throw new Exception();
+        argu.writeLine("br i1 " + argu.resReg + ", label %" + label2 + ", label %" + label3);
         argu.tabs++;
         argu.writeLabel(label2);
         n.f4.accept(this, argu);
@@ -467,12 +483,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine("call void (i32) @print_int(i32 " + argu.resReg + ")");
         return null;
     }
-
-    /**
-     *       | ArrayLength()
-     *       | MessageSend()
-     *       | Clause()
-     */
 
     /**
      * f0 -> Clause()
@@ -599,64 +609,63 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(ArrayLookup n, CLLVMArgs argu) throws Exception {
         n.f0.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        if (!argu.resType.endsWith("*")) throw new Exception();
-        String expr1Reg = argu.resReg, expr1Type = argu.resType.substring(0, argu.resType.length() - 1);
+        if (!argu.resType.endsWith("Array*")) throw new Exception();
+        String expr1Reg = argu.resReg, expr1TypeNoPtr = argu.resType.substring(0, argu.resType.length() - 1), arrayType = expr1TypeNoPtr.compareTo("%_BooleanArray") == 0 ? "i1" : "i32";
         n.f2.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         if (argu.resType.compareTo("i32") != 0) throw new Exception();
-        String expr2Reg = argu.resReg;
-        String reg1 = "%_" + argu.regCount++;
-        argu.writeLine(reg1 + " = load " + expr1Type + ", " + expr1Type + " *" + expr1Reg);
-        String reg2 = "%_" + argu.regCount++;
-        argu.writeLine(reg2 + " = icmp ult i32 " + expr2Reg + ", " + reg1);
+        String expr2Reg = argu.resReg, reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++, reg3 = "%_" + argu.regCount++;
         String label1 = "oob" + argu.oobCount++, label2 = "oob" + argu.oobCount++, label3 = "oob" + argu.oobCount++;
-        argu.writeLine("br i1 " + reg2 + ", label %" + label1 + ", label %" + label2);
+        argu.writeLine(reg1 + " = getelementptr " + expr1TypeNoPtr + ", " + expr1TypeNoPtr + "* " + expr1Reg + ", i32 0, i32 0");
+        argu.writeLine(reg2 + " = load i32, i32* " + reg1);
+        argu.writeLine(reg3 + " = icmp ult i32 " + expr2Reg + ", " + reg2);
+        argu.writeLine("br i1 " + reg3 + ", label %" + label1 + ", label %" + label2);
         argu.writeLabel(label1);
-        String reg3 = "%_" + argu.regCount++, reg4 = "%_" + argu.regCount++, reg5 = "%_" + argu.regCount++;
-        argu.writeLine(reg3 + " = add i32 " + expr2Reg + ", 1");
-        argu.writeLine(reg4 + " = getelementptr " + expr1Type + ", " + expr1Type + "* " + expr1Reg + ", i32 " + reg3);
-        argu.writeLine(reg5 + " = load " + expr1Type + ", " + expr1Type + "* " + reg4);
-        String resReg = reg5;
-        argu.writeLine("br label %" + label3);
+        String reg4 = "%_" + argu.regCount++, reg5 = "%_" + argu.regCount++, reg6 = "%_" + argu.regCount++;
+        argu.writeLine(reg4 + " = getelementptr " + expr1TypeNoPtr + ", " + expr1TypeNoPtr + "* " + expr1Reg + ", i32 0, i32 1");
+        argu.writeLine(reg5 + " = getelementptr " + arrayType + ", " + arrayType + "* " + reg4 + ", i32 " + reg2);
+        argu.writeLine(reg6 + " = load " + arrayType + ", " + arrayType + "* " + reg5);
+        String resReg = reg6;
         argu.writeLine("br label %" + label3);
         argu.writeLabel(label2);
         argu.writeLine("call void @throw_oob()");
         argu.writeLine("br label %" + label3);
         argu.writeLabel(label3);
-        argu.writeLine("call void (i32) @print_int(i32 " + resReg + ")");
+        argu.resReg = resReg;
+        argu.resType = arrayType;
+        return null;
+    }
+    
+    /**
+     * f0 -> PrimaryExpression()
+     * f1 -> "."
+     * f2 -> "length"
+     */
+    @Override
+    public String visit(ArrayLength n, CLLVMArgs argu) throws Exception {
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (!argu.resType.endsWith("Array*")) throw new Exception();
+        String expr1Reg = argu.resReg, expr1TypeNoPtr = argu.resType.substring(0, argu.resType.length() - 1);
+        String reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++;
+        argu.writeLine(reg1 + " = getelementptr " + expr1TypeNoPtr + ", " + expr1TypeNoPtr + "* " + expr1Reg + ", i32 0, i32 0");
+        argu.writeLine(reg2 + " = load i32, i32* " + reg1);
+        argu.resReg = reg2;
+        argu.resType = "i32";
         return null;
     }
 
     /**
      * f0 -> PrimaryExpression()
-    * f1 -> "."
-    * f2 -> "length"
-    */
-    public R visit(ArrayLength n, A argu) throws Exception {
-    R _ret=null;
-    n.f0.accept(this, argu);
-    n.f1.accept(this, argu);
-    n.f2.accept(this, argu);
-    return _ret;
-    }
-
-    /**
-     * f0 -> PrimaryExpression()
-    * f1 -> "."
-    * f2 -> Identifier()
-    * f3 -> "("
-    * f4 -> ( ExpressionList() )?
-    * f5 -> ")"
-    */
-    public R visit(MessageSend n, A argu) throws Exception {
-    R _ret=null;
-    n.f0.accept(this, argu);
-    n.f1.accept(this, argu);
-    n.f2.accept(this, argu);
-    n.f3.accept(this, argu);
-    n.f4.accept(this, argu);
-    n.f5.accept(this, argu);
-    return _ret;
+     * f1 -> "."
+     * f2 -> Identifier()
+     * f3 -> "("
+     * f4 -> ( ExpressionList() )?
+     * f5 -> ")"
+     */
+    @Override
+    public String visit(MessageSend n, CLLVMArgs argu) throws Exception {
+        return null;
     }
 
     /**
