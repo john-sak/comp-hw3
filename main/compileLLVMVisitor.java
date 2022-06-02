@@ -93,7 +93,15 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         classInfo thisClass = argu.symbolTable.get(scope[0]);
         while (thisClass != null) {
             OTEntry entry = argu.offsetTable.get(scope[0]);
-            for (OTData data : entry.methods) if (data.identifier.compareTo(scope[1]) == 0) return data.offset / 8;
+            for (OTData data : entry.methods)
+                if (data.identifier.compareTo(scope[1]) == 0) {
+                    methodInfo methodI;
+                    if ((methodI = thisClass.methods.get(scope[1])) == null) throw new Exception();
+                    argu.resReg = getTypeLLVM(methodI.returnValue);
+                    argu.resType = "i8*";
+                    if (methodI.argNum > 0) for (String type : methodI.argTypes.split(", ")) argu.resType += ", " + getTypeLLVM(type);
+                    return data.offset / 8;
+                }
             thisClass = thisClass.superclass;
         }
         throw new Exception();
@@ -665,6 +673,22 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(MessageSend n, CLLVMArgs argu) throws Exception {
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i8*") != 0) throw new Exception();
+        String expr1Reg = argu.resReg;
+        String reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++, reg3 = "%_" + argu.regCount++;
+        argu.writeLine(reg1 + " = bitcast i8* " + expr1Reg + " to i8***");
+        argu.writeLine(reg2 + " = load i8**, i8*** " + reg1);
+        argu.writeLine(reg3 + " = getelementptr i8*, i8** " + reg2 + ", i32 " + getOffsetMeth(n.f2.accept(this, argu), argu));
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        String retType = argu.resReg, args = argu.resType;
+        String reg4 = "%_" + argu.regCount++, reg5 = "%_" + argu.regCount++, reg6 = "%_" + argu.regCount++;
+        argu.writeLine(reg4 + " = load i8*, i8** " + reg3);
+        argu.writeLine(reg5 + " = bitcast i8* " + reg4 + "to " + retType + " (" + args + ")*");
+        argu.writeLine(reg6 + " = call " + retType + " " + reg5 + "(i8* " + expr1Reg + (n.f4.present() ? "" : ", " + n.f4.accept(this, argu)) + ")");
+        argu.resReg = reg6;
+        argu.resType = retType;
         return null;
     }
 
@@ -676,7 +700,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(ExpressionList n, CLLVMArgs argu) throws Exception {
         n.f0.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        return argu.resType + n.f1.accept(this, argu);
+        return argu.resType + " " + argu.resReg + n.f1.accept(this, argu);
     }
 
     /**
@@ -695,7 +719,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(ExpressionTerm n, CLLVMArgs argu) throws Exception {
         n.f0.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        return ", " + argu.resType;
+        return ", " + argu.resType + " " + argu.resReg;
     }
 
     /**
@@ -708,6 +732,107 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      *       | AllocationExpression()
      *       | BracketExpression()
      */
+    @Override
+    public String visit(PrimaryExpression n, CLLVMArgs argu) throws Exception {
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("%_BooleanArray") != 0 && argu.resType.compareTo("%_IntegerArray") != 0 && argu.resType.compareTo("i1") != 0 && argu.resType.compareTo("i32") != 0 && argu.resType.compareTo("i8*") != 0) {
+            String typeNoPtr = argu.resType.substring(0, argu.resType.length() - 1), reg = "%_" + argu.regCount++;
+            argu.writeLine(reg + " = load " + typeNoPtr + ", " + typeNoPtr + "* " + argu.resReg);
+            argu.resReg = reg;
+            argu.resType = typeNoPtr;
+        }
+        return null;
+    }
+
+    /**
+     * f0 -> <INTEGER_LITERAL>
+     */
+    @Override
+    public String visit(IntegerLiteral n, CLLVMArgs argu) throws Exception {
+        argu.resReg = n.f0.toString();
+        argu.resType = "i32";
+        return null;
+    }
+    
+    /**
+     * f0 -> "true"
+     */
+    @Override
+    public String visit(TrueLiteral n, CLLVMArgs argu) throws Exception {
+        argu.resReg = "1";
+        argu.resType = "i1";
+        return null;
+    }
+    
+    /**
+     * f0 -> "false"
+     */
+    @Override
+    public String visit(FalseLiteral n, CLLVMArgs argu) throws Exception {
+        argu.resReg = "0";
+        argu.resType = "i1";
+        return null;
+    }
+
+    /**
+     * f0 -> "this"
+     */
+    @Override
+    public String visit(ThisExpression n, CLLVMArgs argu) throws Exception {
+        argu.resReg = "%this";
+        argu.resType = "i8*";
+        return null;
+    }
+
+    /**
+    * f0 -> "new"
+    * f1 -> "boolean"
+    * f2 -> "["
+    * f3 -> Expression()
+    * f4 -> "]"
+    */
+    public R visit(BooleanArrayAllocationExpression n, A argu) throws Exception {
+    R _ret=null;
+    n.f0.accept(this, argu);
+    n.f1.accept(this, argu);
+    n.f2.accept(this, argu);
+    n.f3.accept(this, argu);
+    n.f4.accept(this, argu);
+    return _ret;
+    }
+
+    /**
+     * f0 -> "new"
+    * f1 -> "int"
+    * f2 -> "["
+    * f3 -> Expression()
+    * f4 -> "]"
+    */
+    public R visit(IntegerArrayAllocationExpression n, A argu) throws Exception {
+    R _ret=null;
+    n.f0.accept(this, argu);
+    n.f1.accept(this, argu);
+    n.f2.accept(this, argu);
+    n.f3.accept(this, argu);
+    n.f4.accept(this, argu);
+    return _ret;
+    }
+
+    /**
+     * f0 -> "new"
+    * f1 -> Identifier()
+    * f2 -> "("
+    * f3 -> ")"
+    */
+    public R visit(AllocationExpression n, A argu) throws Exception {
+    R _ret=null;
+    n.f0.accept(this, argu);
+    n.f1.accept(this, argu);
+    n.f2.accept(this, argu);
+    n.f3.accept(this, argu);
+    return _ret;
+    }
 
     /**
      * f0 -> <IDENTIFIER>
