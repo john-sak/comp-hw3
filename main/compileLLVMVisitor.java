@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.ArrayList;
 
 import java.util.Map;
-import java.util.HashMap;
 
 class CLLVMArgs {
     String scope = null, resReg = null, resType = null;
@@ -67,19 +66,18 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     }
 
     public String resolveIdentifier(String ID, CLLVMArgs argu) throws Exception {
+        if (!argu.scope.contains("->")) throw new Exception();
         String[] scope = argu.scope.split("->");
         classInfo classI;
         if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
-        if (argu.scope.contains("->")) {
-            methodInfo methodI;
-            if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
-            if (ID.compareTo("this") == 0) return classI.name;
-            fieldInfo fieldI;
-            if ((fieldI = methodI.localVars.get(ID)) != null) return fieldI.type;
-            while (classI != null) {
-                if ((fieldI = classI.fields.get(ID)) != null) return fieldI.type;
-                classI = classI.superclass;
-            }
+        if (ID.compareTo("this") == 0) return classI.name;
+        methodInfo methodI;
+        if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
+        fieldInfo fieldI;
+        if ((fieldI = methodI.localVars.get(ID)) != null) return fieldI.type;
+        while (classI != null) {
+            if ((fieldI = classI.fields.get(ID)) != null) return fieldI.type;
+            classI = classI.superclass;
         }
         throw new Exception();
     }
@@ -107,9 +105,24 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         }
         throw new Exception();
     }
-
+    
     public int getSizeClass(String identifier, CLLVMArgs argu) throws Exception {
-        return 1;
+        String oldArgu = argu.scope;
+        int size = 8;
+        classInfo thisClass = argu.symbolTable.get(identifier);
+        while (thisClass != null) {
+            OTEntry entry = argu.offsetTable.get(thisClass.name);
+            for (OTData data : entry.variables) {
+                argu.scope = data.scope;
+                String type = resolveIdentifier(data.identifier, argu);
+                if (type.compareTo("boolean") == 0) size += 1;
+                else if (type.compareTo("int") == 0) size += 4;
+                else size += 8;
+            }
+            thisClass = thisClass.superclass;
+        }
+        argu.scope = oldArgu;
+        return size;
     }
 
     /**
@@ -173,8 +186,8 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine("define i32 @main() {");
         String oldArgu = argu.scope;
         argu.scope = n.f1.accept(this, argu) + "->main";
-        argu.regCount = 0;
         argu.tabs++;
+        argu.regCount = 0;
         n.f14.accept(this, argu);
         n.f15.accept(this, argu);
         argu.writeLine("ret i32 0");
@@ -447,8 +460,8 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLabel(label2);
         n.f5.accept(this, argu);
         argu.writeLine("br label %" + label3);
-        argu.tabs--;
         argu.writeLabel(label3);
+        argu.tabs--;
         return null;
     }
 
@@ -472,8 +485,8 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLabel(label2);
         n.f4.accept(this, argu);
         argu.writeLine("br label %" + label1);
-        argu.tabs--;
         argu.writeLabel(label3);
+        argu.tabs--;
         return null;
     }
 
@@ -855,7 +868,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         String resReg = reg3;
         argu.writeLine(reg4 + " = getelementptr %_IntegerArray, %_IntegerArray* " + reg3 + ", i32 0, i32 0");
         argu.writeLine(reg5 + " = store i32 " + exprReg + ", i32 *" + reg4);
-        argu.writeLine(reg6 + " = call i8* @calloc(i32 4, i32 " + exprReg + ")"); // i32 = 1b
+        argu.writeLine(reg6 + " = call i8* @calloc(i32 4, i32 " + exprReg + ")"); // i32 = 4b
         argu.writeLine(reg7 + " = bitcast i8* " + reg6 + " to i32*");
         argu.writeLine(reg8 + " = getelementptr %_IntegerArray, %_IntegerArray* " + reg3 + ", i32 0, i32 1");
         argu.writeLine(reg9 + " = store i32* " + reg7 + ", i32** " + reg8);
@@ -874,7 +887,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(AllocationExpression n, CLLVMArgs argu) throws Exception {
         String identifier = n.f1.accept(this, argu);
         String reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++, reg3 = "%_" + argu.regCount++;
-        argu.writeLine(reg1 + " = call i8* @calloc(i31 1, i31 " + getSizeClass(identifier, argu));
+        argu.writeLine(reg1 + " = call i8* @calloc(i32 1, i32 " + getSizeClass(identifier, argu) + ")");
         String resReg = reg1;
         argu.writeLine(reg2 + " = bitcast i8* " + reg1 + " to i8***");
         VTEntry entry;
@@ -909,8 +922,10 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(BracketExpression n, CLLVMArgs argu) throws Exception {
+        argu.tabs++;
         n.f0.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
+        argu.tabs--;
         return null;
     }
 
