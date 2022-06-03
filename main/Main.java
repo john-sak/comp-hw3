@@ -41,20 +41,21 @@ public class Main {
                     System.err.println(ex.getMessage());
                     throw new Exception();
                 }
+                FileWriter writer = new FileWriter(fileName);
                 VTArgs arguVTA = new VTArgs();
-                arguVTA.writer = new FileWriter(fileName);
+                arguVTA.writer = writer;
                 arguVTA.symbolTable = STVisitor.globalST;
                 arguVTA.offsetTable = OTVisitor.stack;
                 vTableVisitor VTVisitor = new vTableVisitor();
                 root.accept(VTVisitor, arguVTA);
                 CLLVMArgs arguCLLVMA = new CLLVMArgs();
-                arguCLLVMA.writer = arguVTA.writer;
+                arguCLLVMA.writer = writer;
                 arguCLLVMA.symbolTable = STVisitor.globalST;
                 arguCLLVMA.offsetTable = OTVisitor.stack;
                 arguCLLVMA.vTableSizes = VTVisitor.vTableEntries;
                 compileLLVMVisitor CLLVMVisitor = new compileLLVMVisitor();
                 root.accept(CLLVMVisitor, arguCLLVMA);
-                arguVTA.writer.close();
+                writer.close();
                 System.out.println("Compilation of program in inputFile \"" + args[i] + "\" to LLVM IR succesful (file " + fileName + ").");
             }
             catch(ParseException ex){
