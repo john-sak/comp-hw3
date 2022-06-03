@@ -51,6 +51,7 @@ public class Main {
                 arguCLLVMA.writer = arguVTA.writer;
                 arguCLLVMA.symbolTable = STVisitor.globalST;
                 arguCLLVMA.offsetTable = OTVisitor.stack;
+                arguCLLVMA.vTableSizes = VTVisitor.vTableEntries;
                 compileLLVMVisitor CLLVMVisitor = new compileLLVMVisitor();
                 root.accept(CLLVMVisitor, arguCLLVMA);
                 arguVTA.writer.close();

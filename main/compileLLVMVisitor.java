@@ -14,6 +14,7 @@ class CLLVMArgs {
     FileWriter writer = null;
     Map<String, classInfo> symbolTable = null;
     Map<String, OTEntry> offsetTable = null;
+    Map<String, VTEntry> vTableSizes = null;
     int tabs = 0, regCount = 0, ifCount = 0, loopCount = 0, andCount = 0, oobCount = 0, arrayCount = 0;
 
     public void writeLine(String str) throws Exception {
@@ -107,6 +108,10 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         throw new Exception();
     }
 
+    public int getSizeClass(String identifier, CLLVMArgs argu) throws Exception {
+        return 1;
+    }
+
     /**
      * f0 -> MainClass()
      * f1 -> ( TypeDeclaration() )*
@@ -117,6 +122,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if (argu.writer == null) throw new Exception();
         if (argu.symbolTable == null) throw new Exception();
         if (argu.offsetTable == null) throw new Exception();
+        if (argu.vTableSizes == null) throw new Exception();
         argu.writeLine("declare i8* @calloc(i32, i32)");
         argu.writeLine("declare i32 @printf(i8*, ...)");
         argu.writeLine("declare void @exit(i32)\n");
@@ -375,22 +381,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         String exprReg = argu.resReg, exprType = argu.resType;
         getIdentifier(n.f0.accept(this, argu), argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
-        // if (!argu.resType.endsWith("Array*")) throw new Exception();
-        // if (!argu.scope.contains("->")) throw new Exception();
-        // String[] scope = argu.scope.split("->");
-        // classInfo classI;
-        // if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
-        // methodInfo methodI;
-        // if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
-        // String identifier = n.f0.accept(this, argu);
-        // String type = getTypeLLVM(resolveIdentifier(identifier, argu)) + "*", register;
-        // if (methodI.localVars.containsKey(identifier)) register = "%" + identifier;
-        // else {
-        //     String reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++;
-        //     argu.writeLine(reg1 + " = getelementptr i8, i8* %this, i32 " + getOffsetVar(identifier, argu));
-        //     argu.writeLine(reg2 + " = bitcast i8* " + reg1 + " to " + type);
-        //     register = reg2;
-        // }
         argu.writeLine("store " + exprType + " " + exprReg + ", " + argu.resType + " " + argu.resReg);
         return null;
     }
@@ -786,6 +776,14 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.resType = "i1";
         return null;
     }
+    
+    /**
+     * f0 -> <IDENTIFIER>
+     */
+    @Override
+    public String visit(Identifier n, CLLVMArgs argu) throws Exception {
+        return n.f0.toString();
+    }
 
     /**
      * f0 -> "this"
@@ -817,53 +815,103 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine("call void @throw_oob()");
         argu.writeLine("br label %" + label2);
         argu.writeLabel(label2);
-        argu.writeLine(reg + " = call i8* @calloc(i32 4, i32 " + exprReg + ")"); // size
-        argu.writeLine(reg + " = bitcast i8* " + reg + " to i1*");
-        argu.writeLine(reg + " = call i8* @calloc(i32 4, i32 2)"); // size
-        argu.writeLine(reg + " = store ");
-        argu.writeLine(reg + " = bitcast i8* " + reg + " to %_BooleanArray*");
-        argu.resReg = reg;
+        String reg2 = "%_" + argu.regCount++, reg3 = "%_" + argu.regCount++, reg4 = "%_" + argu.regCount++, reg5 = "%_" + argu.regCount++, reg6 = "%_" + argu.regCount++, reg7 = "%_" + argu.regCount++, reg8 = "%_" + argu.regCount++, reg9 = "%_" + argu.regCount++;
+        argu.writeLine(reg2 + " = call i8* @calloc(i32 1, i32 12)"); // i32 = 4b, i1* = 8b
+        argu.writeLine(reg3 + " = bitcast i8* " + reg2 + " to %_BooleanArray*");
+        String resReg = reg3;
+        argu.writeLine(reg4 + " = getelementptr %_BooleanArray, %_BooleanArray* " + reg3 + ", i32 0, i32 0");
+        argu.writeLine(reg5 + " = store i32 " + exprReg + ", i32 *" + reg4);
+        argu.writeLine(reg6 + " = call i8* @calloc(i32 1, i32 " + exprReg + ")"); // i1 = 1b
+        argu.writeLine(reg7 + " = bitcast i8* " + reg6 + " to i1*");
+        argu.writeLine(reg8 + " = getelementptr %_BooleanArray, %_BooleanArray* " + reg3 + ", i32 0, i32 1");
+        argu.writeLine(reg9 + " = store i1* " + reg7 + ", i1** " + reg8);
+        argu.resReg = resReg;
         argu.resType = "%_BooleanArray*";
+        return null;
+    }
+    
+    /**
+     * f0 -> "new"
+     * f1 -> "int"
+     * f2 -> "["
+     * f3 -> Expression()
+     * f4 -> "]"
+     */
+    public String visit(IntegerArrayAllocationExpression n, CLLVMArgs argu) throws Exception {
+        n.f3.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i32") != 0) throw new Exception();
+        String exprReg = argu.resReg, reg1 = "%_" + argu.regCount++;
+        String label1 = "%arr_alloc" + argu.arrayCount++, label2 = "%arr_alloc" + argu.arrayCount++;
+        argu.writeLine(reg1 + " = icmp slt i32 " + exprReg + ", 0");
+        argu.writeLine("br i1 " + reg1 + ", label %" + label1 + ", label %" + label2);
+        argu.writeLabel(label1);
+        argu.writeLine("call void @throw_oob()");
+        argu.writeLine("br label %" + label2);
+        argu.writeLabel(label2);
+        String reg2 = "%_" + argu.regCount++, reg3 = "%_" + argu.regCount++, reg4 = "%_" + argu.regCount++, reg5 = "%_" + argu.regCount++, reg6 = "%_" + argu.regCount++, reg7 = "%_" + argu.regCount++, reg8 = "%_" + argu.regCount++, reg9 = "%_" + argu.regCount++;
+        argu.writeLine(reg2 + " = call i8* @calloc(i32 1, i32 12)"); // i32 = 4b, i32* = 8b
+        argu.writeLine(reg3 + " = bitcast i8* " + reg2 + " to %_IntegerArray*");
+        String resReg = reg3;
+        argu.writeLine(reg4 + " = getelementptr %_IntegerArray, %_IntegerArray* " + reg3 + ", i32 0, i32 0");
+        argu.writeLine(reg5 + " = store i32 " + exprReg + ", i32 *" + reg4);
+        argu.writeLine(reg6 + " = call i8* @calloc(i32 4, i32 " + exprReg + ")"); // i32 = 1b
+        argu.writeLine(reg7 + " = bitcast i8* " + reg6 + " to i32*");
+        argu.writeLine(reg8 + " = getelementptr %_IntegerArray, %_IntegerArray* " + reg3 + ", i32 0, i32 1");
+        argu.writeLine(reg9 + " = store i32* " + reg7 + ", i32** " + reg8);
+        argu.resReg = resReg;
+        argu.resType = "%_IntegerArray*";
         return null;
     }
 
     /**
      * f0 -> "new"
-    * f1 -> "int"
-    * f2 -> "["
-    * f3 -> Expression()
-    * f4 -> "]"
-    */
-    public R visit(IntegerArrayAllocationExpression n, A argu) throws Exception {
-    R _ret=null;
-    n.f0.accept(this, argu);
-    n.f1.accept(this, argu);
-    n.f2.accept(this, argu);
-    n.f3.accept(this, argu);
-    n.f4.accept(this, argu);
-    return _ret;
-    }
-
-    /**
-     * f0 -> "new"
-    * f1 -> Identifier()
-    * f2 -> "("
-    * f3 -> ")"
-    */
-    public R visit(AllocationExpression n, A argu) throws Exception {
-    R _ret=null;
-    n.f0.accept(this, argu);
-    n.f1.accept(this, argu);
-    n.f2.accept(this, argu);
-    n.f3.accept(this, argu);
-    return _ret;
-    }
-
-    /**
-     * f0 -> <IDENTIFIER>
+     * f1 -> Identifier()
+     * f2 -> "("
+     * f3 -> ")"
      */
     @Override
-    public String visit(Identifier n, CLLVMArgs argu) throws Exception {
-        return n.f0.toString();
+    public String visit(AllocationExpression n, CLLVMArgs argu) throws Exception {
+        String identifier = n.f1.accept(this, argu);
+        String reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++, reg3 = "%_" + argu.regCount++;
+        argu.writeLine(reg1 + " = call i8* @calloc(i31 1, i31 " + getSizeClass(identifier, argu));
+        String resReg = reg1;
+        argu.writeLine(reg2 + " = bitcast i8* " + reg1 + " to i8***");
+        VTEntry entry;
+        if ((entry = argu.vTableSizes.get(identifier)) == null) throw new Exception();
+        argu.writeLine(reg3 + " = getelementptr [" + entry.size + " x i8*], [" + entry.size + " x 18*]* @." + identifier + "_vtable, i32 0, i32 0");
+        argu.writeLine("store i8** " + reg3 + ", i8*** " + reg2);
+        argu.resReg = resReg;
+        argu.resType = "i8*";
+        return null;
     }
+
+    /**
+     * f0 -> "!"
+     * f1 -> Clause()
+     */
+    @Override
+    public String visit(NotExpression n, CLLVMArgs argu) throws Exception {
+        n.f1.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        if (argu.resType.compareTo("i1") != 0) throw new Exception();
+        String reg = "%_" + argu.regCount++;
+        argu.writeLine(reg + " = xor i1 1, " + argu.resReg);
+        argu.resReg = reg;
+        argu.resType = "i1";
+        return null;
+    }
+
+    /**
+     * f0 -> "("
+     * f1 -> Expression()
+     * f2 -> ")"
+     */
+    @Override
+    public String visit(BracketExpression n, CLLVMArgs argu) throws Exception {
+        n.f0.accept(this, argu);
+        if (argu.resReg == null || argu.resType == null) throw new Exception();
+        return null;
+    }
+
 }
