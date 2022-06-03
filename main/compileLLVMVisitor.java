@@ -86,21 +86,21 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         return 0;
     }
 
-    public int getOffsetMeth(String identifier, CLLVMArgs argu) throws Exception {
-        String[] scope = argu.scope.split("->");
-        if (scope.length != 2) throw new Exception();
-        classInfo thisClass = argu.symbolTable.get(scope[0]);
+    public int getOffsetMeth(String identifier, String scope, CLLVMArgs argu) throws Exception {
+        classInfo thisClass = argu.symbolTable.get(scope);
         while (thisClass != null) {
-            OTEntry entry = argu.offsetTable.get(scope[0]);
-            for (OTData data : entry.methods)
-                if (data.identifier.compareTo(scope[1]) == 0) {
+            OTEntry entry = argu.offsetTable.get(identifier);
+            for (OTData data : entry.methods) {
+                System.out.println("----- compileLLVMVisitor.getOffsetMeth() -----");
+                if (data.identifier.compareTo(identifier) == 0) {
                     methodInfo methodI;
-                    if ((methodI = thisClass.methods.get(scope[1])) == null) throw new Exception();
+                    if ((methodI = thisClass.methods.get(identifier)) == null) throw new Exception();
                     argu.resReg = getTypeLLVM(methodI.returnValue);
                     argu.resType = "i8*";
                     if (methodI.argNum > 0) for (String type : methodI.argTypes.split(", ")) argu.resType += ", " + getTypeLLVM(type);
                     return data.offset / 8;
                 }
+            }
             thisClass = thisClass.superclass;
         }
         throw new Exception();
@@ -685,14 +685,14 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(MessageSend n, CLLVMArgs argu) throws Exception {
-        n.f0.accept(this, argu);
+        String scope = n.f0.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         if (argu.resType.compareTo("i8*") != 0) throw new Exception();
         String exprReg = argu.resReg;
         String reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++, reg3 = "%_" + argu.regCount++, reg4 = "%_" + argu.regCount++, reg5 = "%_" + argu.regCount++, reg6 = "%_" + argu.regCount++;
         argu.writeLine(reg1 + " = bitcast i8* " + exprReg + " to i8***");
         argu.writeLine(reg2 + " = load i8**, i8*** " + reg1);
-        argu.writeLine(reg3 + " = getelementptr i8*, i8** " + reg2 + ", i32 " + getOffsetMeth(n.f2.accept(this, argu), argu));
+        argu.writeLine(reg3 + " = getelementptr i8*, i8** " + reg2 + ", i32 " + getOffsetMeth(n.f2.accept(this, argu), scope, argu));
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         String retType = argu.resReg, args = argu.resType;
         argu.writeLine(reg4 + " = load i8*, i8** " + reg3);
@@ -746,15 +746,17 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     @Override
     public String visit(PrimaryExpression n, CLLVMArgs argu) throws Exception {
         String identifier = n.f0.accept(this, argu);
-        if (identifier != null) {
-            getIdentifier(identifier, argu);
-            if (argu.resReg == null || argu.resType == null) throw new Exception();
-            String typeNoPtr = argu.resType.substring(0, argu.resType.length() - 1), reg = "%_" + argu.regCount++;
-            argu.writeLine(reg + " = load " + typeNoPtr + ", " + typeNoPtr + "* " + argu.resReg);
-            argu.resReg = reg;
-            argu.resType = typeNoPtr;
-        }
-        return null;
+        if (identifier != null)
+            if (identifier.contains("::")) identifier = identifier.split("::")[1];
+            else {
+                getIdentifier(identifier, argu);
+                if (argu.resReg == null || argu.resType == null) throw new Exception();
+                String typeNoPtr = argu.resType.substring(0, argu.resType.length() - 1), reg = "%_" + argu.regCount++;
+                argu.writeLine(reg + " = load " + typeNoPtr + ", " + typeNoPtr + "* " + argu.resReg);
+                argu.resReg = reg;
+                argu.resType = typeNoPtr;
+            }
+        return identifier;
     }
 
     /**
@@ -891,7 +893,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine("store i8** " + reg3 + ", i8*** " + reg2);
         argu.resReg = resReg;
         argu.resType = "i8*";
-        return null;
+        return "new_scope::" + identifier;
     }
 
     /**
