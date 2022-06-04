@@ -790,7 +790,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         String identifier = n.f0.accept(this, argu);
         if (identifier != null)
             if (identifier.contains("::")) identifier = identifier.split("::")[1];
-            else if (!argu.symbolTable.containsKey(identifier) && identifier.compareTo("i1") != 0 && identifier.compareTo("i32") != 0 && identifier.compareTo("i8*") != 0 && !identifier.endsWith("Array*")) {
+            else if (!argu.symbolTable.containsKey(identifier) && identifier.compareTo("boolean") != 0 && identifier.compareTo("int") != 0 && !identifier.endsWith("[]")) {
                 getIdentifier(identifier, argu);
                 if (argu.resReg == null || argu.resType == null) throw new Exception();
                 if (!argu.resType.endsWith("Array*")) {
