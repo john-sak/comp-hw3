@@ -89,9 +89,8 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public int getOffsetMeth(String identifier, String scope, CLLVMArgs argu) throws Exception {
         classInfo thisClass = argu.symbolTable.get(scope);
         while (thisClass != null) {
-            OTEntry entry = argu.offsetTable.get(identifier);
-            for (OTData data : entry.methods) {
-                System.out.println("----- compileLLVMVisitor.getOffsetMeth() -----");
+            OTEntry entry = argu.offsetTable.get(scope);
+            for (OTData data : entry.methods)
                 if (data.identifier.compareTo(identifier) == 0) {
                     methodInfo methodI;
                     if ((methodI = thisClass.methods.get(identifier)) == null) throw new Exception();
@@ -100,7 +99,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
                     if (methodI.argNum > 0) for (String type : methodI.argTypes.split(", ")) argu.resType += ", " + getTypeLLVM(type);
                     return data.offset / 8;
                 }
-            }
             thisClass = thisClass.superclass;
         }
         throw new Exception();
