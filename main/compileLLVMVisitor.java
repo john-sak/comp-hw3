@@ -799,7 +799,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
                     argu.resReg = reg;
                     argu.resType = typeNoPtr;
                 }
-                identifier = getTypeLLVM(resolveIdentifier(identifier, argu));
+                identifier = resolveIdentifier(identifier, argu);
             }
         return identifier;
     }
