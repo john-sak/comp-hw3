@@ -694,11 +694,9 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     @Override
     public String visit(MessageSend n, CLLVMArgs argu) throws Exception {
         String scope = n.f0.accept(this, argu);
-        // System.out.println("got " + scope);
         if (scope == null) throw new Exception();
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         if (argu.resType.compareTo("i8*") != 0) throw new Exception();
-        // System.out.println(scope + "." + n.f2.accept(this, argu));
         String exprReg = argu.resReg;
         String reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++, reg3 = "%_" + argu.regCount++, reg4 = "%_" + argu.regCount++, reg5 = "%_" + argu.regCount++, reg6 = "%_" + argu.regCount++;
         argu.writeLine(reg1 + " = bitcast i8* " + exprReg + " to i8***");
@@ -716,7 +714,6 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         methodInfo methodI;
         if ((methodI = classI.methods.get(n.f2.accept(this, argu))) == null) throw new Exception();
         String ret = methodI.returnValue;
-        System.out.println("returns " + ret + ", " + retType);
         if (argu.symbolTable.containsKey(ret)) return ret;
         else return null;
     }
@@ -766,7 +763,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         String identifier = n.f0.accept(this, argu);
         if (identifier != null)
             if (identifier.contains("::")) identifier = identifier.split("::")[1];
-            else {
+            else if (!argu.symbolTable.containsKey(identifier)) {
                 getIdentifier(identifier, argu);
                 if (argu.resReg == null || argu.resType == null) throw new Exception();
                 String typeNoPtr = argu.resType.substring(0, argu.resType.length() - 1), reg = "%_" + argu.regCount++;
