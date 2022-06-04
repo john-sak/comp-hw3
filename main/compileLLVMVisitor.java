@@ -66,18 +66,28 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     }
 
     public String resolveIdentifier(String ID, CLLVMArgs argu) throws Exception {
-        if (!argu.scope.contains("->")) throw new Exception();
-        String[] scope = argu.scope.split("->");
-        classInfo classI;
-        if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
-        if (ID.compareTo("this") == 0) return classI.name;
-        methodInfo methodI;
-        if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
-        fieldInfo fieldI;
-        if ((fieldI = methodI.localVars.get(ID)) != null) return fieldI.type;
-        while (classI != null) {
-            if ((fieldI = classI.fields.get(ID)) != null) return fieldI.type;
-            classI = classI.superclass;
+        if (argu.scope.contains("->")) {
+            String[] scope = argu.scope.split("->");
+            classInfo classI;
+            if ((classI = argu.symbolTable.get(scope[0])) == null) throw new Exception();
+            if (ID.compareTo("this") == 0) return classI.name;
+            methodInfo methodI;
+            if ((methodI = classI.methods.get(scope[1])) == null) throw new Exception();
+            fieldInfo fieldI;
+            if ((fieldI = methodI.localVars.get(ID)) != null) return fieldI.type;
+            while (classI != null) {
+                if ((fieldI = classI.fields.get(ID)) != null) return fieldI.type;
+                classI = classI.superclass;
+            }
+        } else {
+            classInfo classI;
+            if ((classI = argu.symbolTable.get(argu.scope)) == null) throw new Exception();
+            if (ID.compareTo("this") == 0) return classI.name;
+            fieldInfo fieldI;
+            while (classI != null) {
+                if ((fieldI = classI.fields.get(ID)) != null) return fieldI.type;
+                classI = classI.superclass;
+            }
         }
         throw new Exception();
     }
@@ -109,9 +119,9 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         int size = 8;
         classInfo thisClass = argu.symbolTable.get(identifier);
         while (thisClass != null) {
-            OTEntry entry = argu.offsetTable.get(thisClass.name);
+            OTEntry entry = argu.offsetTable.get(identifier);
+            argu.scope = identifier;
             for (OTData data : entry.variables) {
-                argu.scope = data.scope;
                 String type = resolveIdentifier(data.identifier, argu);
                 if (type.compareTo("boolean") == 0) size += 1;
                 else if (type.compareTo("int") == 0) size += 4;
@@ -268,15 +278,15 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if ((classI = argu.symbolTable.get(oldArgu)) == null) throw new Exception();
         methodInfo methodI;
         if ((methodI = classI.methods.get(methName)) == null) throw new Exception();
-        argu.writeLine("define " + getTypeLLVM(methodI.returnValue) + " @" + oldArgu + "." + methName + "(i8* %this");
+        argu.writer.write("define " + getTypeLLVM(methodI.returnValue) + " @" + oldArgu + "." + methName + "(i8* %this");
         List<paramInfoNode> listInfo = new ArrayList<paramInfoNode>();
         if (n.f4.present())
-            for (String param : n.f4.accept(this, argu).split(", ")) {
-                String[] temp = param.split(" ");
-                if (temp.length != 2) throw new Exception();
-                listInfo.add(new paramInfoNode(temp[1], temp[0]));
-                argu.writer.write(", " + getTypeLLVM(temp[0]) + " %." + temp[1]);
-            }
+        for (String param : n.f4.accept(this, argu).split(", ")) {
+            String[] temp = param.split(" ");
+            if (temp.length != 2) throw new Exception();
+            listInfo.add(new paramInfoNode(temp[1], temp[0]));
+            argu.writer.write(", " + getTypeLLVM(temp[0]) + " %." + temp[1]);
+        }
         argu.writer.write(") {\n");
         argu.tabs++;
         for (paramInfoNode node : listInfo) {
@@ -455,7 +465,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         n.f4.accept(this, argu);
         argu.writeLine("br label %" + label3);
         argu.writeLabel(label2);
-        n.f5.accept(this, argu);
+        n.f6.accept(this, argu);
         argu.writeLine("br label %" + label3);
         argu.writeLabel(label3);
         argu.tabs--;
@@ -686,6 +696,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         String scope = n.f0.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         if (argu.resType.compareTo("i8*") != 0) throw new Exception();
+        // root.kati kai oxi tree.kati
         String exprReg = argu.resReg;
         String reg1 = "%_" + argu.regCount++, reg2 = "%_" + argu.regCount++, reg3 = "%_" + argu.regCount++, reg4 = "%_" + argu.regCount++, reg5 = "%_" + argu.regCount++, reg6 = "%_" + argu.regCount++;
         argu.writeLine(reg1 + " = bitcast i8* " + exprReg + " to i8***");
@@ -694,8 +705,8 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         String retType = argu.resReg, args = argu.resType;
         argu.writeLine(reg4 + " = load i8*, i8** " + reg3);
-        argu.writeLine(reg5 + " = bitcast i8* " + reg4 + "to " + retType + " (" + args + ")*");
-        argu.writeLine(reg6 + " = call " + retType + " " + reg5 + "(i8* " + exprReg + (n.f4.present() ? "" : ", " + n.f4.accept(this, argu)) + ")");
+        argu.writeLine(reg5 + " = bitcast i8* " + reg4 + " to " + retType + " (" + args + ")*");
+        argu.writeLine(reg6 + " = call " + retType + " " + reg5 + "(i8* " + exprReg + (n.f4.present() ? ", " + n.f4.accept(this, argu) : "") + ")");
         argu.resReg = reg6;
         argu.resType = retType;
         return null;
@@ -726,7 +737,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
      */
     @Override
     public String visit(ExpressionTerm n, CLLVMArgs argu) throws Exception {
-        n.f0.accept(this, argu);
+        n.f1.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         return ", " + argu.resType + " " + argu.resReg;
     }
@@ -802,7 +813,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     public String visit(ThisExpression n, CLLVMArgs argu) throws Exception {
         argu.resReg = "%this";
         argu.resType = "i8*";
-        return null;
+        return "new_scope::" + argu.scope.split("->")[0];
     }
 
     /**
@@ -918,7 +929,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
     @Override
     public String visit(BracketExpression n, CLLVMArgs argu) throws Exception {
         argu.tabs++;
-        n.f0.accept(this, argu);
+        n.f1.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         argu.tabs--;
         return null;
