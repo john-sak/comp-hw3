@@ -165,9 +165,9 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine("ret void");
         argu.tabs--;
         argu.writeLine("}\n");
-        argu.writeLine("define voide @throw_oob() {");
+        argu.writeLine("define void @throw_oob() {");
         argu.tabs++;
-        argu.writeLine("%_str = bitcast [15 x i8]* @cOOB to i8*");
+        argu.writeLine("%_str = bitcast [15 x i8]* @_cOOB to i8*");
         argu.writeLine("call i32 (i8*, ...) @printf(i8* %_str)");
         argu.writeLine("call void @exit(i32 1)");
         argu.writeLine("ret void");
@@ -956,7 +956,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         VTEntry entry;
         if ((entry = argu.vTableSizes.get(identifier)) == null) throw new Exception();
         String reg3 = "%_" + argu.regCount++;
-        argu.writeLine(reg3 + " = getelementptr [" + entry.size + " x i8*], [" + entry.size + " x 18*]* @." + identifier + "_vtable, i32 0, i32 0");
+        argu.writeLine(reg3 + " = getelementptr [" + entry.size + " x i8*], [" + entry.size + " x i8*]* @." + identifier + "_vtable, i32 0, i32 0");
         argu.writeLine("store i8** " + reg3 + ", i8*** " + reg2);
         argu.resReg = resReg;
         argu.resType = "i8*";
