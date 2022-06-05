@@ -92,9 +92,17 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         }
         throw new Exception();
     }
-
+    
     public int getOffsetVar(String identifier, CLLVMArgs argu) throws Exception {
-        return 0;
+        if (!argu.scope.contains("->")) throw new Exception();
+        String scope = argu.scope.split("->")[0];
+        classInfo thisClass = argu.symbolTable.get(scope);
+        while (thisClass != null) {
+            OTEntry entry = argu.offsetTable.get(scope);
+            for (OTData data : entry.variables) if (data.identifier.compareTo(identifier) == 0) return data.offset + 8;
+            thisClass = thisClass.superclass;
+        }
+        throw new Exception();
     }
 
     public int getOffsetMeth(String identifier, String scope, CLLVMArgs argu) throws Exception {
