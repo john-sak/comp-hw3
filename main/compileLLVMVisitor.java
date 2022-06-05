@@ -454,8 +454,10 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLabel(label1);
         String reg4 = "%_" + argu.regCount++;
         argu.writeLine(reg4 + " = getelementptr " + idTypeNoPtr + ", " + idTypeNoPtr + "* " + idReg + ", i32 0, i32 1");
+        String reg01 = "%_" + argu.regCount++;
+        argu.writeLine(reg01 + " = bitcast " + arrayType + "** " + reg4 + " to " + arrayType + "*");
         String reg5 = "%_" + argu.regCount++;
-        argu.writeLine(reg5 + " = getelementptr " + arrayType + ", " + arrayType + "* " + reg4 + ", i32 " + reg2);
+        argu.writeLine(reg5 + " = getelementptr " + arrayType + ", " + arrayType + "* " + reg01 + ", i32 " + reg2);
         n.f5.accept(this, argu);
         if (argu.resReg == null || argu.resType == null) throw new Exception();
         argu.writeLine("store " + argu.resType + " " + argu.resReg + ", " + arrayType + "* " + reg5);
@@ -681,8 +683,10 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLabel(label1);
         String reg4 = "%_" + argu.regCount++;
         argu.writeLine(reg4 + " = getelementptr " + expr1TypeNoPtr + ", " + expr1TypeNoPtr + "* " + expr1Reg + ", i32 0, i32 1");
+        String reg01 = "%_" + argu.regCount++;
+        argu.writeLine(reg01 + " = bitcast " + arrayType + "** " + reg4 + " to " + arrayType + "*");
         String reg5 = "%_" + argu.regCount++;
-        argu.writeLine(reg5 + " = getelementptr " + arrayType + ", " + arrayType + "* " + reg4 + ", i32 " + reg2);
+        argu.writeLine(reg5 + " = getelementptr " + arrayType + ", " + arrayType + "* " + reg01 + ", i32 " + reg2);
         String reg6 = "%_" + argu.regCount++;
         argu.writeLine(reg6 + " = load " + arrayType + ", " + arrayType + "* " + reg5);
         String resReg = reg6, label3 = "oob" + argu.oobCount++;
@@ -874,7 +878,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if (argu.resType.compareTo("i32") != 0) throw new Exception();
         String exprReg = argu.resReg, reg1 = "%_" + argu.regCount++;
         argu.writeLine(reg1 + " = icmp slt i32 " + exprReg + ", 0");
-        String label1 = "%arr_alloc" + argu.arrayCount++, label2 = "%arr_alloc" + argu.arrayCount++;
+        String label1 = "arr_alloc" + argu.arrayCount++, label2 = "arr_alloc" + argu.arrayCount++;
         argu.writeLine("br i1 " + reg1 + ", label %" + label1 + ", label %" + label2);
         argu.writeLabel(label1);
         argu.writeLine("call void @throw_oob()");
@@ -884,20 +888,20 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine(reg2 + " = call i8* @calloc(i32 1, i32 12)"); // i32 = 4b, i1* = 8b
         String reg3 = "%_" + argu.regCount++;
         argu.writeLine(reg3 + " = bitcast i8* " + reg2 + " to %_BooleanArray*");
-        String resReg = reg3, reg4 = "%_" + argu.regCount++;
+        String reg4 = "%_" + argu.regCount++;
         argu.writeLine(reg4 + " = getelementptr %_BooleanArray, %_BooleanArray* " + reg3 + ", i32 0, i32 0");
-        String reg5 = "%_" + argu.regCount++;
-        argu.writeLine(reg5 + " = store i32 " + exprReg + ", i32 *" + reg4);
+        argu.writeLine("store i32 " + exprReg + ", i32 *" + reg4);
         String reg6 = "%_" + argu.regCount++;
         argu.writeLine(reg6 + " = call i8* @calloc(i32 1, i32 " + exprReg + ")"); // i1 = 1b
         String reg7 = "%_" + argu.regCount++;
         argu.writeLine(reg7 + " = bitcast i8* " + reg6 + " to i1*");
         String reg8 = "%_" + argu.regCount++;
         argu.writeLine(reg8 + " = getelementptr %_BooleanArray, %_BooleanArray* " + reg3 + ", i32 0, i32 1");
+        argu.writeLine("store i1* " + reg7 + ", i1** " + reg8);
         String reg9 = "%_" + argu.regCount++;
-        argu.writeLine(reg9 + " = store i1* " + reg7 + ", i1** " + reg8);
-        argu.resReg = resReg;
-        argu.resType = "%_BooleanArray*";
+        argu.writeLine(reg9 + " = bitcast %_BooleanArray* " + reg3 + " to %_BooleanArray**");
+        argu.resReg = reg9;
+        argu.resType = "%_BooleanArray**";
         return null;
     }
     
@@ -914,7 +918,7 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         if (argu.resType.compareTo("i32") != 0) throw new Exception();
         String exprReg = argu.resReg, reg1 = "%_" + argu.regCount++;
         argu.writeLine(reg1 + " = icmp slt i32 " + exprReg + ", 0");
-        String label1 = "%arr_alloc" + argu.arrayCount++, label2 = "%arr_alloc" + argu.arrayCount++;
+        String label1 = "arr_alloc" + argu.arrayCount++, label2 = "arr_alloc" + argu.arrayCount++;
         argu.writeLine("br i1 " + reg1 + ", label %" + label1 + ", label %" + label2);
         argu.writeLabel(label1);
         argu.writeLine("call void @throw_oob()");
@@ -924,20 +928,20 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
         argu.writeLine(reg2 + " = call i8* @calloc(i32 1, i32 12)"); // i32 = 4b, i32* = 8b
         String reg3 = "%_" + argu.regCount++;
         argu.writeLine(reg3 + " = bitcast i8* " + reg2 + " to %_IntegerArray*");
-        String resReg = reg3, reg4 = "%_" + argu.regCount++;
+        String reg4 = "%_" + argu.regCount++;
         argu.writeLine(reg4 + " = getelementptr %_IntegerArray, %_IntegerArray* " + reg3 + ", i32 0, i32 0");
-        String reg5 = "%_" + argu.regCount++;
-        argu.writeLine(reg5 + " = store i32 " + exprReg + ", i32 *" + reg4);
+        argu.writeLine("store i32 " + exprReg + ", i32 *" + reg4);
         String reg6 = "%_" + argu.regCount++;
         argu.writeLine(reg6 + " = call i8* @calloc(i32 4, i32 " + exprReg + ")"); // i32 = 4b
         String reg7 = "%_" + argu.regCount++;
         argu.writeLine(reg7 + " = bitcast i8* " + reg6 + " to i32*");
         String reg8 = "%_" + argu.regCount++;
         argu.writeLine(reg8 + " = getelementptr %_IntegerArray, %_IntegerArray* " + reg3 + ", i32 0, i32 1");
+        argu.writeLine("store i32* " + reg7 + ", i32** " + reg8);
         String reg9 = "%_" + argu.regCount++;
-        argu.writeLine(reg9 + " = store i32* " + reg7 + ", i32** " + reg8);
-        argu.resReg = resReg;
-        argu.resType = "%_IntegerArray*";
+        argu.writeLine(reg9 + " = bitcast %_IntegerArray* " + reg3 + " to %_IntegerArray**");
+        argu.resReg = reg9;
+        argu.resType = "%_IntegerArray**";
         return null;
     }
 
