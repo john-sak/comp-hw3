@@ -33,7 +33,10 @@ public class Main {
                 root.accept(OTVisitor, arguOTA);
                 System.out.println("Offset Table for program in inputFile \"" + args[i] + "\" created succesfully.");
                 // OTVisitor.printResult();
-                String fileName = args[i].split("\\.")[0] + ".ll";
+                String[] split = args[i].split("\\.");
+                String fileName = "";
+                for (int j = 0; j < split.length - 1; j++) fileName += split[j] + ".";
+                fileName += "ll";
                 try {
                     File file = new File(fileName);
                     if (!file.createNewFile()) System.err.println("File already axists.");
