@@ -113,8 +113,8 @@ class compileLLVMVisitor extends GJDepthFirst<String, CLLVMArgs> {
                 if (data.identifier.compareTo(identifier) == 0) {
                     methodInfo methodI;
                     if ((methodI = thisClass.methods.get(identifier)) == null) throw new Exception();
-                    argu.resReg = getTypeLLVM(methodI.returnValue);
-                    argu.resType = "i8*";
+                    argu.resReg = getTypeLLVM(methodI.returnValue); // ret type
+                    argu.resType = "i8*";   // param types
                     if (methodI.argNum > 0) for (String type : methodI.argTypes.split(", ")) argu.resType += ", " + getTypeLLVM(type);
                     return data.offset / 8;
                 }
